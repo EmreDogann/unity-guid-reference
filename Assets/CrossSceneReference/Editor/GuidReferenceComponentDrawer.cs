@@ -5,18 +5,18 @@ using UnityEngine;
 // Using a property drawer to allow any class to have a field of type GuidRefernce and still get good UX
 // If you are writing your own inspector for a class that uses a GuidReference, drawing it with
 // EditorLayout.PropertyField(prop) or similar will get this to show up automatically
-[CustomPropertyDrawer(typeof(GuidReference))]
-public class GuidReferenceDrawer : PropertyDrawer
+[CustomPropertyDrawer(typeof(BaseGuidReference<>), true)]
+public class GuidReferenceComponentDrawer : PropertyDrawer
 {
     private bool IsInit;
     private SerializedProperty guidProp;
     private SerializedProperty sceneProp;
     private SerializedProperty nameProp;
 
+    private Type targetType;
     private bool showExtraInfo;
     private const float LINE_PADDING = 2.0f;
     private const float BUTTON_PADDING = 1.0f;
-
 
     // cache off GUI content to avoid creating garbage every frame in editor
     private readonly GUIContent sceneLabel =
@@ -38,22 +38,23 @@ public class GuidReferenceDrawer : PropertyDrawer
             nameProp = property.FindPropertyRelative("cachedName");
             sceneProp = property.FindPropertyRelative("cachedScene");
 
+            targetType = fieldInfo.FieldType.GetGenericArguments()[0];
+
             showExtraInfo = guidProp.isExpanded;
             IsInit = true;
         }
 
+        position.height = EditorGUIUtility.singleLineHeight;
 
         // Using BeginProperty / EndProperty on the parent property means that
         // prefab override logic works on the entire property.
         EditorGUI.BeginProperty(position, label, property);
 
-        position.height = EditorGUIUtility.singleLineHeight;
-
         // Draw prefix label, returning the new rect we can draw in
         Rect guidCompPosition = EditorGUI.PrefixLabel(position, GUIUtility.GetControlID(FocusType.Passive), label);
 
         Guid currentGuid;
-        GameObject currentGO = null;
+        Component currentComponent = null;
 
         // working with array properties is a bit unwieldy
         // you have to get the property at each index manually
@@ -66,11 +67,13 @@ public class GuidReferenceDrawer : PropertyDrawer
         }
 
         currentGuid = new Guid(byteArray);
-        currentGO = GuidManager.ResolveGuid(currentGuid);
-        GuidComponent currentGuidComponent = currentGO != null ? currentGO.GetComponent<GuidComponent>() : null;
+        currentComponent = GuidManager.ResolveGuid(currentGuid, targetType);
+        GuidComponent currentGuidComponent =
+            currentComponent != null ? currentComponent.GetComponent<GuidComponent>() : null;
 
         GuidComponent component = null;
 
+        // Debug.Log($"Guid: {currentGuid}, Component: {currentComponent}");
         if (currentGuid != Guid.Empty && currentGuidComponent == null)
         {
             // if our reference is set, but the target isn't loaded, we display the target and the scene it is in, and provide a way to clear the reference
@@ -140,7 +143,6 @@ public class GuidReferenceDrawer : PropertyDrawer
                     GuidComponent;
         }
 
-
         if (currentGuidComponent != null && component == null)
         {
             ClearPreviousGuid();
@@ -156,7 +158,7 @@ public class GuidReferenceDrawer : PropertyDrawer
             // only update the GUID Prop if something changed. This fixes multi-edit on GUID References
             if (component != currentGuidComponent)
             {
-                byteArray = component.GetGuid().ToByteArray();
+                byteArray = component.GetGuid(targetType).ToByteArray();
                 arraySize = guidProp.arraySize;
                 for (int i = 0; i < arraySize; ++i)
                 {
@@ -187,7 +189,6 @@ public class GuidReferenceDrawer : PropertyDrawer
 
             EditorGUI.indentLevel--;
         }
-
 
         EditorGUI.EndProperty();
     }

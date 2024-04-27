@@ -1,9 +1,10 @@
-﻿using UnityEngine;
-using UnityEngine.TestTools;
-using NUnit.Framework;
+﻿using System;
 using System.Collections;
-using System.Collections.Generic;
+using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
+using UnityEngine.TestTools;
+using Object = UnityEngine.Object;
 
 public class GuidReferenceTests
 {
@@ -14,10 +15,10 @@ public class GuidReferenceTests
     // reference it
     // dereference it
 
-    string prefabPath;
-    GuidComponent guidBase;
-    GameObject prefab;
-    GuidComponent guidPrefab;
+    private string prefabPath;
+    private GuidComponent guidBase;
+    private GameObject prefab;
+    private GuidComponent guidPrefab;
 
     [OneTimeSetUp]
     public void Setup()
@@ -25,7 +26,7 @@ public class GuidReferenceTests
         prefabPath = "Assets/TemporaryTestGuid.prefab";
 
         guidBase = CreateNewGuid();
-        prefab = PrefabUtility.CreatePrefab(prefabPath, guidBase.gameObject);
+        prefab = PrefabUtility.SaveAsPrefabAsset(guidBase.gameObject, prefabPath);
 
         guidPrefab = prefab.GetComponent<GuidComponent>();
     }
@@ -35,7 +36,7 @@ public class GuidReferenceTests
         GameObject newGO = new GameObject("GuidTestGO");
         return newGO.AddComponent<GuidComponent>();
     }
-    
+
     [UnityTest]
     public IEnumerator GuidCreation()
     {
@@ -50,9 +51,10 @@ public class GuidReferenceTests
     [UnityTest]
     public IEnumerator GuidDuplication()
     {
-        LogAssert.Expect(LogType.Warning, "Guid Collision Detected while creating GuidTestGO(Clone).\nAssigning new Guid.");
-        
-        GuidComponent clone = GameObject.Instantiate<GuidComponent>(guidBase);
+        LogAssert.Expect(LogType.Warning,
+            "Guid Collision Detected while creating GuidTestGO(Clone).\nAssigning new Guid.");
+
+        GuidComponent clone = Object.Instantiate(guidBase);
 
         Assert.AreNotEqual(guidBase.GetGuid(), clone.GetGuid());
 
@@ -63,7 +65,7 @@ public class GuidReferenceTests
     public IEnumerator GuidPrefab()
     {
         Assert.AreNotEqual(guidBase.GetGuid(), guidPrefab.GetGuid());
-        Assert.AreEqual(guidPrefab.GetGuid(), System.Guid.Empty);
+        Assert.AreEqual(guidPrefab.GetGuid(), Guid.Empty);
 
         yield return null;
     }
@@ -71,7 +73,7 @@ public class GuidReferenceTests
     [UnityTest]
     public IEnumerator GuidPrefabInstance()
     {
-        GuidComponent instance = GameObject.Instantiate<GuidComponent>(guidPrefab);
+        GuidComponent instance = Object.Instantiate(guidPrefab);
         Assert.AreNotEqual(guidBase.GetGuid(), instance.GetGuid());
         Assert.AreNotEqual(instance.GetGuid(), guidPrefab.GetGuid());
 
