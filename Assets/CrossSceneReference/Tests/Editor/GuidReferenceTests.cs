@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
+using Assert = UnityEngine.Assertions.Assert;
 using Object = UnityEngine.Object;
 
 public class GuidReferenceTests
@@ -84,7 +85,7 @@ public class GuidReferenceTests
     public IEnumerator GuidValidReference()
     {
         GuidReference reference = new GuidReference(guidBase);
-        Assert.AreEqual(reference.gameObject, guidBase.gameObject);
+        Assert.AreEqual(reference.GameObject, guidBase.gameObject);
 
         yield return null;
     }
@@ -96,7 +97,7 @@ public class GuidReferenceTests
         GuidReference reference = new GuidReference(newGuid);
         Object.DestroyImmediate(newGuid);
 
-        Assert.IsNull(reference.gameObject);
+        Assert.IsNull(reference.GameObject);
 
         yield return null;
     }

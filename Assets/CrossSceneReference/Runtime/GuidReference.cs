@@ -12,10 +12,15 @@ public class GuidReference : BaseGuidReference<GameObject>
 public class GuidReference<T> : BaseGuidReference<T> where T : Component
 {
     private protected T CachedComponentReference;
+
+#if UNITY_EDITOR
+    [SerializeField] private string cachedGOName;
+#endif
+
     public GuidReference() {}
     public GuidReference(GuidComponent target) : base(target) {}
 
-    public T component
+    public T Component
     {
         get
         {
@@ -33,7 +38,7 @@ public class GuidReference<T> : BaseGuidReference<T> where T : Component
     protected override void GuidAdded(GameObject go, Component component)
     {
         T componentRef = component as T;
-        if (componentRef != null)
+        if (componentRef)
         {
             CachedComponentReference = componentRef;
             // OnGuidAdded(value);
@@ -48,7 +53,7 @@ public class GuidReference<T> : BaseGuidReference<T> where T : Component
         base.GuidRemoved();
     }
 
-    protected override void PreOnAfterDeserialize()
+    protected override void Pre_OnAfterDeserialize()
     {
         CachedComponentReference = null;
     }

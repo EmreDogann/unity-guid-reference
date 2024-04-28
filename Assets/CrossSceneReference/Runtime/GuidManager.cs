@@ -1,47 +1,40 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 // Class to handle registering and accessing objects by GUID
 public class GuidManager
 {
     // for each GUID we need to know the Game Object it references
     // and an event to store all the callbacks that need to know when it is destroyed
-    private class GuidInfo
+    internal struct GuidInfo
     {
         public GuidComponent GuidComponent;
-        public Guid RequestedGuid;
-        // public bool IsGuidResolved = false;
+        public Guid Guid;
 
         public event Action<GameObject, Component> OnAdd;
         public event Action OnRemove;
 
-        public GuidInfo() {}
-
         public GuidInfo(Guid guid, GuidComponent comp)
         {
-            RequestedGuid = guid;
+            Guid = guid;
             GuidComponent = comp;
+            OnAdd = null;
+            OnRemove = null;
         }
 
         public void HandleAddCallback()
         {
-            if (OnAdd != null)
-            {
-                Component component = GuidComponent.GetComponentFromGuid(RequestedGuid);
-                if (component)
-                {
-                    OnAdd(GuidComponent.gameObject, component);
-                }
-            }
+            Component component = GuidComponent.GetComponentFromGuid(Guid);
+            OnAdd?.Invoke(GuidComponent.gameObject, component);
         }
 
         public void HandleRemoveCallback()
         {
-            if (OnRemove != null)
-            {
-                OnRemove();
-            }
+            OnRemove?.Invoke();
         }
     }
 
@@ -68,6 +61,18 @@ public class GuidManager
 
         _instance.InternalRemove(guid);
     }
+
+#if UNITY_EDITOR
+    internal static void Remove(string prefabAssetPath)
+    {
+        if (_instance == null)
+        {
+            _instance = new GuidManager();
+        }
+
+        _instance.InternalRemove_Prefab(prefabAssetPath);
+    }
+#endif
 
     public static GameObject ResolveGuid(Guid guid, Action<GameObject, Component> onAddCallback,
         Action onRemoveCallback)
@@ -154,6 +159,23 @@ public class GuidManager
     // instance data
     private readonly Dictionary<Guid, GuidInfo> _guidToObjectMap;
 
+#if UNITY_EDITOR
+    internal static Dictionary<Guid, GuidInfo> GetGuidInfos
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = new GuidManager();
+            }
+
+            return _instance._guidToObjectMap;
+        }
+    }
+    internal static event Action OnGuidAdded;
+    internal static event Action OnGuidRemoved;
+#endif
+
     private GuidManager()
     {
         _guidToObjectMap = new Dictionary<Guid, GuidInfo>();
@@ -170,16 +192,15 @@ public class GuidManager
 
         if (_guidToObjectMap.TryAdd(guid, info))
         {
+#if UNITY_EDITOR
+            OnGuidAdded?.Invoke();
+#endif
             return true;
         }
 
         GuidInfo existingInfo = _guidToObjectMap[guid];
-        if (existingInfo == null)
-        {
-            return false;
-        }
 
-        if (existingInfo.GuidComponent != null && existingInfo.GuidComponent != guidComponent)
+        if (existingInfo.GuidComponent && existingInfo.GuidComponent.gameObject != guidComponent.gameObject)
         {
             // normally, a duplicate GUID is a big problem, means you won't necessarily be referencing what you expect
             if (Application.isPlaying)
@@ -195,7 +216,7 @@ public class GuidManager
                 // we warn about this just for pedantry reasons, and so you can detect if you are unexpectedly copying these components
                 Debug.LogWarningFormat(guidComponent,
                     "Guid Collision Detected while creating {0}.\nAssigning new Guid.",
-                    guidComponent != null ? guidComponent.gameObject.name : "NULL");
+                    guidComponent.gameObject.name);
             }
 
             return false;
@@ -203,8 +224,15 @@ public class GuidManager
 
         // if we already tried to find this GUID, but haven't set the game object to anything specific, copy any OnAdd callbacks then call them
         existingInfo.GuidComponent = info.GuidComponent;
+        existingInfo.Guid = info.Guid;
         existingInfo.HandleAddCallback();
+
         _guidToObjectMap[guid] = existingInfo;
+
+#if UNITY_EDITOR
+        OnGuidAdded?.Invoke();
+#endif
+
         return true;
     }
 
@@ -216,8 +244,50 @@ public class GuidManager
             info.HandleRemoveCallback();
         }
 
-        _guidToObjectMap.Remove(guid);
+        bool result = _guidToObjectMap.Remove(guid);
+
+#if UNITY_EDITOR
+        if (result)
+        {
+            OnGuidRemoved?.Invoke();
+        }
+#endif
     }
+
+#if UNITY_EDITOR
+    private void InternalRemove_Prefab(string prefabAssetPath)
+    {
+        bool wasAnyRemoved = false;
+        foreach (var entry in _guidToObjectMap.ToList())
+        {
+            if (!entry.Value.GuidComponent)
+            {
+                continue;
+            }
+
+            string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(entry.Value.GuidComponent);
+            if (path.Equals(prefabAssetPath))
+            {
+                Object obj =
+                    PrefabUtility.GetCorrespondingObjectFromSourceAtPath(entry.Value.GuidComponent, prefabAssetPath);
+                if (obj)
+                {
+                    bool result = _guidToObjectMap.Remove(entry.Key);
+
+                    if (result)
+                    {
+                        wasAnyRemoved = true;
+                    }
+                }
+            }
+        }
+
+        if (wasAnyRemoved)
+        {
+            OnGuidRemoved?.Invoke();
+        }
+    }
+#endif
 
     // nice easy api to find a GUID, and if it works, register an on destroy callback
     // this should be used to register functions to cleanup any data you cache on finding
@@ -230,8 +300,13 @@ public class GuidManager
             return null;
         }
 
-        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info) && info.GuidComponent != null)
+        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
         {
+            if (!info.GuidComponent)
+            {
+                return null;
+            }
+
             if (onAddCallback != null)
             {
                 info.OnAdd += onAddCallback;
@@ -246,19 +321,17 @@ public class GuidManager
             return info.GuidComponent.gameObject;
         }
 
-        GuidInfo newInfo = new GuidInfo();
-        newInfo.RequestedGuid = guid;
         if (onAddCallback != null)
         {
-            newInfo.OnAdd += onAddCallback;
+            info.OnAdd += onAddCallback;
         }
 
         if (onRemoveCallback != null)
         {
-            newInfo.OnRemove += onRemoveCallback;
+            info.OnRemove += onRemoveCallback;
         }
 
-        _guidToObjectMap.Add(guid, newInfo);
+        _guidToObjectMap.Add(guid, info);
 
         return null;
     }
@@ -271,8 +344,13 @@ public class GuidManager
             return null;
         }
 
-        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info) && info.GuidComponent != null)
+        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
         {
+            if (!info.GuidComponent)
+            {
+                return null;
+            }
+
             if (onAddCallback != null)
             {
                 info.OnAdd += onAddCallback;
@@ -287,19 +365,17 @@ public class GuidManager
             return info.GuidComponent.GetComponentFromGuid(guid) as T;
         }
 
-        GuidInfo newInfo = new GuidInfo();
-        newInfo.RequestedGuid = guid;
         if (onAddCallback != null)
         {
-            newInfo.OnAdd += onAddCallback;
+            info.OnAdd += onAddCallback;
         }
 
         if (onRemoveCallback != null)
         {
-            newInfo.OnRemove += onRemoveCallback;
+            info.OnRemove += onRemoveCallback;
         }
 
-        _guidToObjectMap.Add(guid, newInfo);
+        _guidToObjectMap.Add(guid, info);
 
         return null;
     }
@@ -311,15 +387,27 @@ public class GuidManager
             return null;
         }
 
-        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info) && info.GuidComponent != null)
+        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
         {
+            if (!info.GuidComponent)
+            {
+                return null;
+            }
+
             _guidToObjectMap[guid] = info;
             Component component = info.GuidComponent.GetComponentFromGuid(guid);
-            if (component && component.GetType() == type)
+            if (component)
             {
-                return component;
+                if (component.GetType() == type)
+                {
+                    return component;
+                }
+
+                return null;
             }
         }
+
+        _guidToObjectMap.Add(guid, info);
 
         return null;
     }

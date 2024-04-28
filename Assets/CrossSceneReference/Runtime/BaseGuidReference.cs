@@ -14,18 +14,17 @@ using UnityEditor;
 [Serializable]
 public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver where T : Object
 {
-    // cache the referenced Game Object and component if we find one for performance
+    // Cache the referenced Game Object and component if we find one for performance
     private protected GameObject CachedGoReference;
-    // private protected T CachedComponentReference;
     private protected bool IsCacheSet;
 
-    // store our GUID in a form that Unity can save
+    // Store our GUID in a form that Unity can save
     [SerializeField]
     private byte[] serializedGuid;
     private protected Guid Guid;
 
 #if UNITY_EDITOR
-    // decorate with some extra info in Editor so we can inform a user of what that GUID means
+    // Decorate with some extra info in Editor so we can inform a user of what that GUID means
     [SerializeField]
     private string cachedName;
     [SerializeField]
@@ -36,14 +35,13 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
     // public event Action<T> OnGuidAdded = delegate {};
     // public event Action OnGuidRemoved = delegate {};
 
-    // create concrete delegates to avoid boxing. 
+    // Create concrete delegates to avoid boxing.
     // When called 10,000 times, boxing would allocate ~1MB of GC Memory
     private protected Action<GameObject, Component> AddDelegate;
     private protected Action RemoveDelegate;
 
-    // optimized accessor, and ideally the only code you ever call on this class
-    // public abstract T value { get; }
-    public GameObject gameObject
+    // Optimized accessor, and ideally the only code you ever call on this class
+    public GameObject GameObject
     {
         get
         {
@@ -54,18 +52,14 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
 
             CachedGoReference = GuidManager.ResolveGuid(Guid, AddDelegate, RemoveDelegate);
             IsCacheSet = true;
+
             return CachedGoReference;
         }
     }
 
-    public bool IsValid()
-    {
-        return IsCacheSet;
-    }
+    protected BaseGuidReference() {}
 
-    public BaseGuidReference() {}
-
-    public BaseGuidReference(GuidComponent target)
+    protected BaseGuidReference(GuidComponent target)
     {
         Guid = target.GetGuid();
     }
@@ -89,12 +83,12 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
     }
 
     // Used mainly so derived classes can inject their own code to run before base implementation.
-    protected virtual void PreOnAfterDeserialize() {}
+    protected virtual void Pre_OnAfterDeserialize() {}
 
     // Convert from byte array to system guid and reset state
     void ISerializationCallbackReceiver.OnAfterDeserialize()
     {
-        PreOnAfterDeserialize();
+        Pre_OnAfterDeserialize();
 
         CachedGoReference = null;
         IsCacheSet = false;
@@ -104,6 +98,7 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
         }
 
         Guid = new Guid(serializedGuid);
+
         AddDelegate = GuidAdded;
         RemoveDelegate = GuidRemoved;
     }
