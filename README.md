@@ -1,10 +1,8 @@
-Guid Based Reference
+# Guid Based Reference
 
-License - Please see LICENSE.md in this repository
+_Globaly Unique IDentifier (GUID) for Game Objects and Components_
 
-Summary
-A component to give a Globaly Unique IDentifier (GUID) to a Game Object.
-This GUID can then be used to reference an object even if it is another Scene, not loaded yet, or otherwise not easy to directly reference.
+![Unity-Guid-Reference-Banner](https://github.com/EmreDogann/unity-guid-reference/assets/48212096/61bd886e-487e-451d-a88d-8f75af2c573e)
 
 Maintainers
 William Armstrong williama@unity3d.com
