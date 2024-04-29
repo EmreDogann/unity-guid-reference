@@ -29,18 +29,18 @@ Add a `GuidComponent` to any Game Object where you want to reference either itse
 
 In any code that needs to be able to reference objects by GUID, add a `GuidReference` field (for Game Objects) or a `GuidReference<Type>` field (for Components).
 
-For Game Object Reference:
+For Game Object References:
 - `GuidReference.GameObject` will return the GameObject if it is loaded, otherwise null.
 
-For Component Reference:
+For Component References:
 - `GuidReference.GameObject` will return the GameObject the Component is attachted to if it is loaded, otherwise null.
 - `GuidReference.Component` will return the Component if it is loaded, otherwise null. The returned component will already be casted to the correct type, so you can directly use it like normal.
 
 ```C#
 public class TestComponent : MonoBehaviour
 {
-    public GuidReference gameObjectRef;              // Reference Game Object
-    public GuidReference<MeshRenderer> rendererRef;  // Reference Component (MeshRenderer)
+	public GuidReference gameObjectRef;              // Reference Game Object
+	public GuidReference<MeshRenderer> rendererRef;  // Reference Component (MeshRenderer)
 
     private void Update()
     {
