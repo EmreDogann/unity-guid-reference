@@ -5,13 +5,13 @@ _Globaly Unique IDentifier (GUID) for Game Objects and Components_
 ![Unity-Guid-Reference-Banner](https://github.com/EmreDogann/unity-guid-reference/assets/48212096/61bd886e-487e-451d-a88d-8f75af2c573e)
 
 ## What is this?
-This is a fork of the excellent plugin created by the ![Unity Spotlight Team](https://github.com/Unity-Technologies/guid-based-reference) which allows cross scene referencing of Game Objects and serializing of said references to disk.
+This is a fork of the excellent plugin created by the [Unity Spotlight Team](https://github.com/Unity-Technologies/guid-based-reference) which allows cross scene referencing of Game Objects and serializing of said references to disk.
 
 ## What's Changed?
 - Along with Game Objects, you can now also reference any Component across scenes.
 - Revamped editor property drawers for Game Object and Component Guid References for a better UI/UX.
-- Added optional support for ![Sisus' Component Names](https://assetstore.unity.com/packages/tools/utilities/component-names-212478)
-- All the while keeping the runtime overhead to a minimum (![as envisioned with the original plugin](https://www.youtube.com/watch?v=6lRzXqfMXRo)).
+- Added optional support for [Sisus' Component Names](https://assetstore.unity.com/packages/tools/utilities/component-names-212478)
+- All the while keeping the runtime overhead to a minimum ([as envisioned with the original plugin](https://www.youtube.com/watch?v=6lRzXqfMXRo)).
 
 ## How To Install
 Simply download this repository as a .zip file and extract into your project!
