@@ -59,3 +59,5 @@ public class TestComponent : MonoBehaviour
 }
 ```
 
+## Bugs
+This package is still a Work-In-Progress and has not been fully tested for all edge cases. If you encounter a bug, please create an issue on this repo and I will try my best to help you out! :)
