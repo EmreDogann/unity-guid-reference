@@ -289,7 +289,7 @@ public class GuidManager
     }
 #endif
 
-    // nice easy api to find a GUID, and if it works, register an on destroy callback
+    // Nice easy api to find a GUID, and if it works, register an on destroy callback
     // this should be used to register functions to cleanup any data you cache on finding
     // your target. Otherwise, you might keep components in memory by referencing them
     private GameObject ResolveGuidInternal_GameObject(Guid guid, Action<GameObject, Component> onAddCallback,

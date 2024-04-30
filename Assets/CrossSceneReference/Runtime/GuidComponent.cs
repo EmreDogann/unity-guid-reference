@@ -9,36 +9,43 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 #endif
 
+/// <summary>
+///     Stores GUIDs for a cachedComponent on a GameObject
+/// </summary>
 [Serializable]
 public class ComponentGuid : IEquatable<ComponentGuid>
 {
-    public Component component;
+    public Component cachedComponent;
     public Guid Guid;
     public byte[] serializedGuid;
-    [NonSerialized] public byte[] editorSerializedGuid;
+
+    // Store a copy of serializedGuid in a NonSerialized field so we don't lose the GUID on Reset()
+#if UNITY_EDITOR
+    [NonSerialized] public byte[] SerializedGuid_Editor;
+#endif
 
     public ComponentGuid() {}
 
-    public ComponentGuid(Component component)
+    public ComponentGuid(Component cachedComponent)
     {
-        this.component = component;
+        this.cachedComponent = cachedComponent;
     }
 
-    public ComponentGuid(Component component, Guid guid, byte[] serializedGuid)
+    public ComponentGuid(Component cachedComponent, Guid guid, byte[] serializedGuid)
     {
-        this.component = component;
+        this.cachedComponent = cachedComponent;
         Guid = guid;
         this.serializedGuid = serializedGuid;
     }
 
     public bool IsType(Type type)
     {
-        return component.GetType() == type;
+        return cachedComponent.GetType() == type;
     }
 
     public bool IsType<T>() where T : Component
     {
-        return component.GetType() == typeof(T);
+        return cachedComponent.GetType() == typeof(T);
     }
 
     public bool Equals(ComponentGuid other)
@@ -84,47 +91,33 @@ public class ComponentGuid : IEquatable<ComponentGuid>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Guid, serializedGuid);
+        return HashCode.Combine(serializedGuid);
     }
 }
 
-// This component gives a GameObject a stable, non-replicatable Globally Unique IDentifier.
-// It can be used to reference a specific instance of an object no matter where it is.
-// This can also be used for other systems, such as Save/Load game
+/// <summary>
+///     Gives a GameObject and its Components a stable, non-replicatable Globally Unique IDentifier.
+///     It can be used to reference a specific instance of an object no matter where it is.
+///     This can also be used for other systems, such as Save/Load game
+/// </summary>
 [ExecuteAlways] [DisallowMultipleComponent]
 public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 {
-    // From: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/5
-    // Additional Reference: https://www.sisus.co/optional-context-menu-items-in-unity/
-    // [MenuItem("CONTEXT/" + nameof(GuidComponent) + "/Reset", true, int.MinValue)]
-    // private static bool OnValidateReset()
-    // {
-    //     return false;
-    // }
-    //
-    // [MenuItem("CONTEXT/" + nameof(GuidComponent) + "/Reset", false, int.MinValue)]
-    // private static void OnReset()
-    // {
-    //     Debug.LogWarning("MyScript doesn't support Reset.");
-    // }
-
-    private readonly Type GameObjectType = typeof(GameObject);
+    private static readonly Type GameObjectType = typeof(GameObject);
 
     // System guid we use for comparison and generation
     private Guid _guid = Guid.Empty;
-    [SerializeField] internal List<ComponentGuid> ComponentGUIDs = new List<ComponentGuid>();
-    // Used to save out componentGUIDs as a way to prevent those values from getting reset when Reset() is triggered or when applying prefab.
-    // Reference: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/3
-    private readonly List<ComponentGuid> ComponentGUIDs_dump = new List<ComponentGuid>();
-
-    private byte[] _editorValue;
-
     // Unity's serialization system doesn't know about System.Guid, so we convert to a byte array
     // Fun fact, we tried using strings at first, but that allocated memory and was twice as slow
-    [SerializeField]
-    private byte[] _serializedGuid;
+    [SerializeField] private byte[] serializedGuid;
+
+    [SerializeField] internal List<ComponentGuid> componentGUIDs = new List<ComponentGuid>();
+    // Used to save out componentGUIDs as a way to prevent those values from getting reset when Reset() is triggered or when applying prefab.
+    // Reference: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/3
+    private readonly List<ComponentGuid> componentGUIDs_dump = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
+    private byte[] serializedGuid_Editor;
     private bool _isDestroyed;
 #endif
 
@@ -135,12 +128,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     public IReadOnlyList<ComponentGuid> GetComponentGUIDs()
     {
-        return ComponentGUIDs;
-    }
-
-    public bool IsGuidAssigned()
-    {
-        return _guid != Guid.Empty;
+        return componentGUIDs;
     }
 
     #region Equality
@@ -202,7 +190,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     protected bool Equals(GuidComponent other)
     {
-        return Equals(_guid, other._guid) && ComponentGUIDs.SequenceEqual(other.ComponentGUIDs);
+        return Equals(_guid, other._guid) && componentGUIDs.SequenceEqual(other.componentGUIDs);
     }
 
     public override bool Equals(object obj)
@@ -232,71 +220,93 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(_guid, _serializedGuid);
+        return HashCode.Combine(serializedGuid);
     }
 
     #endregion
 
+    /// <summary>
+    ///     Checks if there are GUIDs for multiple components of the same type.
+    /// </summary>
+    /// <param name="T">Type of component to check.</param>
+    /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf(Type T)
     {
-        return ComponentGUIDs.FindAll(componentGuid => componentGuid.IsType(T)).Count > 1;
+        return componentGUIDs.FindAll(componentGuid => componentGuid.IsType(T)).Count > 1;
     }
 
+    /// <summary>
+    ///     Checks if there are GUIDs for multiple components of the same type.
+    /// </summary>
+    /// <typeparam name="T">Type of component to check.</typeparam>
+    /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf<T>() where T : Component
     {
-        return ComponentGUIDs.FindAll(componentGuid => componentGuid.IsType<T>()).Count > 1;
+        return componentGUIDs.FindAll(componentGuid => componentGuid.IsType<T>()).Count > 1;
     }
 
-    // When de-serializing or creating this component, we want to either restore our serialized GUID
-    // or create a new one.
-    internal void CreateGuid(ref Guid guid, ref byte[] serializedGuid, byte[] editorValue)
+    // When de-serializing or creating this GuidComponent, we want to either restore our serialized GUID or create a new one.
+    // If the guid already exists and is valid, then this function will just register the guid with the GuidManager.
+#if UNITY_EDITOR
+    internal void CreateOrRegisterGuid(ref Guid guid, ref byte[] serializedGuid, byte[] serializedGuid_Editor)
+#else
+    internal void CreateOrRegisterGuid(ref Guid guid, ref byte[] _serializedGuid)
+#endif
     {
-        if (!IsSerializedGuidValid(serializedGuid) && IsSerializedGuidValid(editorValue))
-        {
-            serializedGuid = editorValue;
-        }
-
-        // if our serialized data is invalid, then we are a new object and need a new GUID
-        if (serializedGuid == null || serializedGuid.Length != 16)
+        // If our serialized data is invalid, then we are a new object and need a new GUID
+        if (!IsSerializedGuidValid(serializedGuid))
         {
 #if UNITY_EDITOR
-            // if in editor, make sure we aren't a prefab of some kind
-            if (IsAssetOnDisk())
+            // If we need to create a new GUID but there is already one assigned via serializedGuid_Editor, just use that.
+            // This is useful for things like Resetting in editor and applying prefabs.
+            if (IsSerializedGuidValid(serializedGuid_Editor))
             {
-                return;
+                serializedGuid = serializedGuid_Editor;
             }
+            else
+            {
+                // If in editor, make sure we aren't a prefab of some kind
+                if (IsAssetOnDisk())
+                {
+                    return;
+                }
 
-            Undo.RecordObject(this, "Added GUID");
-            Undo.FlushUndoRecordObjects();
+                Undo.RecordObject(this, "Added GUID");
+                Undo.FlushUndoRecordObjects();
 #endif
 
-            guid = Guid.NewGuid();
-            serializedGuid = guid.ToByteArray();
+                guid = Guid.NewGuid();
+                serializedGuid = guid.ToByteArray();
 
 #if UNITY_EDITOR
-            // If we are creating a new GUID for a prefab instance of a prefab, but we have somehow lost our prefab connection
-            // force a save of the modified prefab instance properties
-            if (PrefabUtility.IsPartOfNonAssetPrefabInstance(this))
-            {
-                PrefabUtility.RecordPrefabInstancePropertyModifications(this);
+                // If we are creating a new GUID for a prefab instance of a prefab, but we have somehow lost our prefab connection
+                // force a save of the modified prefab instance properties
+                if (PrefabUtility.IsPartOfNonAssetPrefabInstance(this))
+                {
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(this);
+                }
             }
 #endif
         }
         else if (guid == Guid.Empty)
         {
-            // otherwise, we should set our system guid to our serialized guid
+            // Otherwise, we should set our system guid to our serialized guid
             guid = new Guid(serializedGuid);
         }
 
-        // register with the GUID Manager so that other components can access this
+        // Register with the GUID Manager so that GuidReferences can access this
         if (guid != Guid.Empty)
         {
             if (!GuidManager.Add(guid, this))
             {
-                // if registration fails, we probably have a duplicate or invalid GUID, get us a new one.
+                // If registration fails, we probably have a duplicate or invalid GUID, get us a new one.
                 serializedGuid = null;
                 guid = Guid.Empty;
-                CreateGuid(ref guid, ref serializedGuid, editorValue);
+#if UNITY_EDITOR
+                CreateOrRegisterGuid(ref guid, ref serializedGuid, serializedGuid_Editor);
+#else
+                CreateOrRegisterGuid(ref guid, ref _serializedGuid);
+#endif
             }
         }
     }
@@ -306,7 +316,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     {
         if (EditorUtility.IsPersistent(this))
         {
-            // if the game object is stored on disk, it is a prefab of some kind, despite not returning true for IsPartOfPrefabAsset =/
+            // If the game object is stored on disk, it is a prefab of some kind, despite not returning true for IsPartOfPrefabAsset =/
             return true;
         }
 
@@ -324,12 +334,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         }
 
         prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-        if (prefabStage && prefabStage.IsPartOfPrefabContents(gameObject))
-        {
-            return true;
-        }
-
-        return false;
+        return prefabStage && prefabStage.IsPartOfPrefabContents(gameObject);
     }
 
     internal bool IsAssetOnDisk()
@@ -338,18 +343,10 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     }
 #endif
 
-    // https://forum.unity.com/threads/iserializationcallbackreceiver-thread-safety-concerns.315475/#post-2347924
-    // During OnBeforeSerialize, you can modify any local field that is serialized, as that's how you hand over the serialized representation for unity.
-
-    // We cannot allow a GUID to be saved into a prefab, and we need to convert to byte[]
+    // We cannot allow a GUID to be saved into a prefab, and we also need to convert System.Guids to byte[]s
     public void OnBeforeSerialize()
     {
 #if UNITY_EDITOR
-        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isUpdating)
-        {
-            return;
-        }
-
         if (!this || !gameObject)
         {
             return;
@@ -359,15 +356,16 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         // A prefab asset cannot contain a GUID since it would then be duplicated when instanced.
         if (IsAssetOnDisk())
         {
-            _serializedGuid = null;
+            serializedGuid = null;
             _guid = Guid.Empty;
 
-            ComponentGUIDs_dump.Clear();
-            foreach (ComponentGuid componentGuid in ComponentGUIDs)
+            // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGUIDs_dump for reasoning.
+            componentGUIDs_dump.Clear();
+            foreach (ComponentGuid componentGuid in componentGUIDs)
             {
                 componentGuid.serializedGuid = null;
                 componentGuid.Guid = Guid.Empty;
-                ComponentGUIDs_dump.Add(componentGuid);
+                componentGUIDs_dump.Add(componentGuid);
             }
         }
         else
@@ -375,16 +373,17 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         {
             if (_guid != Guid.Empty)
             {
-                _serializedGuid = _guid.ToByteArray();
+                serializedGuid = _guid.ToByteArray();
             }
 
-            ComponentGUIDs_dump.Clear();
-            foreach (ComponentGuid componentGuid in ComponentGUIDs)
+            // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGUIDs_dump for reasoning.
+            componentGUIDs_dump.Clear();
+            foreach (ComponentGuid componentGuid in componentGUIDs)
             {
-                ComponentGUIDs_dump.Add(componentGuid);
+                componentGUIDs_dump.Add(componentGuid);
             }
 
-            foreach (ComponentGuid componentGuid in ComponentGUIDs_dump)
+            foreach (ComponentGuid componentGuid in componentGUIDs_dump)
             {
                 if (componentGuid.Guid != Guid.Empty)
                 {
@@ -394,27 +393,24 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         }
     }
 
-    // https://forum.unity.com/threads/iserializationcallbackreceiver-thread-safety-concerns.315475/#post-2347924
-    // During OnAfterDeserialize do NOT modify any field that is serialized, even if its local.
-
-    // On load, we can go head a restore our system guid for later use
+    // On load, we can go head a restore our system guids for later use
     public void OnAfterDeserialize()
     {
-        if (IsSerializedGuidValid(_serializedGuid))
+        if (IsSerializedGuidValid(serializedGuid))
         {
-            _guid = new Guid(_serializedGuid);
+            _guid = new Guid(serializedGuid);
         }
 
-        if (ComponentGUIDs_dump != null && ComponentGUIDs_dump.Count > 0)
+        if (componentGUIDs_dump != null && componentGUIDs_dump.Count > 0)
         {
-            ComponentGUIDs.Clear();
-            foreach (ComponentGuid componentGuid in ComponentGUIDs_dump)
+            componentGUIDs.Clear();
+            foreach (ComponentGuid componentGuid in componentGUIDs_dump)
             {
-                ComponentGUIDs.Add(componentGuid);
+                componentGUIDs.Add(componentGuid);
             }
         }
 
-        foreach (ComponentGuid componentGuid in ComponentGUIDs)
+        foreach (ComponentGuid componentGuid in componentGUIDs)
         {
             if (IsSerializedGuidValid(componentGuid.serializedGuid))
             {
@@ -425,8 +421,11 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     private void Awake()
     {
-        CreateGuid(ref _guid, ref _serializedGuid, _editorValue);
+#if UNITY_EDITOR
+        CreateOrRegisterGuid(ref _guid, ref serializedGuid, serializedGuid_Editor);
+        serializedGuid_Editor = serializedGuid;
 
+        // Look for new components on the GameObject. Exclude component types specified in GuidComponentExcluders.
         foreach (Component component in gameObject.GetComponents<Component>())
         {
             if (GuidComponentExcluders.Excluders.Contains(component.GetType()))
@@ -434,30 +433,36 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
                 continue;
             }
 
-            ComponentGuid componentGuid = ComponentGUIDs.FirstOrDefault(c => c.component == component);
+            ComponentGuid componentGuid = componentGUIDs.FirstOrDefault(c => c.cachedComponent == component);
             if (componentGuid == null)
             {
-                componentGuid = new ComponentGuid { component = component };
-                ComponentGUIDs.Add(componentGuid);
+                componentGuid = new ComponentGuid { cachedComponent = component };
+                componentGUIDs.Add(componentGuid);
             }
 
-            CreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid, componentGuid.editorSerializedGuid);
-            componentGuid.editorSerializedGuid = componentGuid.serializedGuid;
+            CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
+                componentGuid.SerializedGuid_Editor);
+            componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
         }
-
-        _editorValue = _serializedGuid;
+#else
+        CreateOrRegisterGuid(ref _guid, ref serializedGuid);
+        foreach (var componentGuid in componentGUIDs)
+        {
+            CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid);
+        }
+#endif
     }
 
 #if UNITY_EDITOR
     private void OnSceneSaving(Scene scene, string path)
     {
         // Check for stale components
-        for (int i = ComponentGUIDs.Count - 1; i >= 0; i--)
+        for (int i = componentGUIDs.Count - 1; i >= 0; i--)
         {
-            if (!ComponentGUIDs[i].component)
+            if (!componentGUIDs[i].cachedComponent)
             {
-                GuidManager.Remove(ComponentGUIDs[i].Guid);
-                ComponentGUIDs.RemoveAt(i);
+                GuidManager.Remove(componentGUIDs[i].Guid);
+                componentGUIDs.RemoveAt(i);
             }
         }
 
@@ -466,91 +471,86 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             .Where(component => !GuidComponentExcluders.Excluders.Contains(component.GetType())).ToList();
         if (components.Count == 0)
         {
-            ComponentGUIDs.Clear();
+            componentGUIDs.Clear();
         }
 
         foreach (Component component in components)
         {
             ComponentGuid componentGuid =
-                ComponentGUIDs.FirstOrDefault(c => c.component == component);
+                componentGUIDs.FirstOrDefault(c => c.cachedComponent == component);
             if (componentGuid == null)
             {
-                componentGuid = new ComponentGuid { component = component };
-                ComponentGUIDs.Add(componentGuid);
+                componentGuid = new ComponentGuid { cachedComponent = component };
+                componentGUIDs.Add(componentGuid);
             }
 
-            CreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid, componentGuid.editorSerializedGuid);
-            componentGuid.editorSerializedGuid = componentGuid.serializedGuid;
+            CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
+                componentGuid.SerializedGuid_Editor);
+            componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
         }
     }
-#endif
 
     private void OnValidate()
     {
-#if UNITY_EDITOR
-        // similar to on Serialize, but gets called on Copying a Component or Applying a Prefab
+        // Similar to on Serialize, but gets called on Copying a Component or Applying a Prefab
         // at a time that lets us detect what we are
         if (IsAssetOnDisk())
         {
-            _serializedGuid = null;
+            serializedGuid = null;
             _guid = Guid.Empty;
 
-            foreach (ComponentGuid componentGuid in ComponentGUIDs)
+            foreach (ComponentGuid componentGuid in componentGUIDs)
             {
                 componentGuid.serializedGuid = null;
                 componentGuid.Guid = Guid.Empty;
             }
         }
         else
-#endif
         {
-            CreateGuid(ref _guid, ref _serializedGuid, _editorValue);
+            CreateOrRegisterGuid(ref _guid, ref serializedGuid, serializedGuid_Editor);
 
             var components = gameObject.GetComponents<Component>()
                 .Where(component => !GuidComponentExcluders.Excluders.Contains(component.GetType())).ToList();
             if (components.Count == 0)
             {
-                ComponentGUIDs.Clear();
+                componentGUIDs.Clear();
             }
 
             foreach (Component component in components)
             {
                 ComponentGuid componentGuid =
-                    ComponentGUIDs.FirstOrDefault(c => c.component == component);
+                    componentGUIDs.FirstOrDefault(c => c.cachedComponent == component);
                 if (componentGuid == null)
                 {
-                    componentGuid = new ComponentGuid { component = component };
-                    ComponentGUIDs.Add(componentGuid);
+                    componentGuid = new ComponentGuid { cachedComponent = component };
+                    componentGUIDs.Add(componentGuid);
                 }
 
-                CreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
-                    componentGuid.editorSerializedGuid);
-                componentGuid.editorSerializedGuid = componentGuid.serializedGuid;
+                CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
+                    componentGuid.SerializedGuid_Editor);
+                componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
             }
         }
 
-        _editorValue = _serializedGuid;
+        serializedGuid_Editor = serializedGuid;
     }
 
     private void OnEnable()
     {
-#if UNITY_EDITOR
         EditorSceneManager.sceneSaving += OnSceneSaving;
-#endif
     }
 
     public void OnDisable()
     {
-#if UNITY_EDITOR
         EditorSceneManager.sceneSaving -= OnSceneSaving;
 
         // Don't run for objects loaded from disk.
         if (GetInstanceID() < 0)
         {
-            // Here we run a delayed call to solve a very specific edge case where the component,
-            // which is part of a prefab, is removed on the prefab instance, and then that component removal modification
-            // is applied via the removed component itself (not via Apply All). For some reason, when this is done,
-            // Unity creates an intermediary instance of this component but does not call OnDestroy(),
+            // Here we run a delayed call to solve a very specific edge case where the cachedComponent,
+            // which is part of a prefab, is removed on the prefab instance, and then that cachedComponent removal modification
+            // is applied via the removed cachedComponent itself (not via Apply All). For some reason, when this is done,
+            // Unity creates an intermediary instance of this cachedComponent but does not call OnDestroy(),
             // so this edge case ends up leaving behind dangling guids.
 
             // This very (and I mean VERY) ugly hack runs late (after all inspectors update, hopefully after the prefab modification is fully applied)
@@ -564,20 +564,30 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
                 }
             };
         }
-#endif
     }
+#endif
 
-    // Never return an invalid GUID
+    /// <summary>
+    ///     Get the Guid of the GameObject this GuidComponent is attached to.
+    /// </summary>
+    /// <returns>Guid of the GameObject. Guid.Empty if not found.</returns>
     public Guid GetGuid()
     {
-        if (_guid == Guid.Empty && IsSerializedGuidValid(_serializedGuid))
+        // Never return an invalid GUID
+        if (_guid == Guid.Empty && IsSerializedGuidValid(serializedGuid))
         {
-            _guid = new Guid(_serializedGuid);
+            _guid = new Guid(serializedGuid);
         }
 
         return _guid;
     }
 
+    /// <summary>
+    ///     Get the Guid of the Component on the same level as this GuidComponent.
+    /// </summary>
+    /// <remarks>This does not handle multiple components of the same type. Will just return the first component it finds.</remarks>
+    /// <param name="type">Type of component to look for.</param>
+    /// <returns>Guid of the Component. Guid.Empty if not found.</returns>
     public Guid GetGuid(Type type)
     {
         if (type == GameObjectType)
@@ -585,39 +595,14 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             return GetGuid();
         }
 
-        foreach (ComponentGuid componentGuid in ComponentGUIDs)
+        foreach (ComponentGuid componentGuid in componentGUIDs)
         {
             if (!componentGuid.IsType(type))
             {
                 continue;
             }
 
-            if (componentGuid.Guid == Guid.Empty &&
-                IsSerializedGuidValid(componentGuid.serializedGuid))
-            {
-                componentGuid.Guid = new Guid(componentGuid.serializedGuid);
-            }
-
-            return componentGuid.Guid;
-        }
-
-        return Guid.Empty;
-    }
-
-    public Guid GetGuid(Component component)
-    {
-        if (component is GuidComponent)
-        {
-            return Guid.Empty;
-        }
-
-        foreach (ComponentGuid componentGuid in ComponentGUIDs)
-        {
-            if (componentGuid.component != component)
-            {
-                continue;
-            }
-
+            // Never return an invalid GUID
             if (componentGuid.Guid == Guid.Empty && IsSerializedGuidValid(componentGuid.serializedGuid))
             {
                 componentGuid.Guid = new Guid(componentGuid.serializedGuid);
@@ -629,25 +614,62 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         return Guid.Empty;
     }
 
+    /// <summary>
+    ///     Same as <see cref="GetGuid(Type)" />.
+    /// </summary>
+    /// <param name="component">The component which you want to find the guid of.</param>
+    public Guid GetGuid(Component component)
+    {
+        if (component is GuidComponent)
+        {
+            return Guid.Empty;
+        }
+
+        foreach (ComponentGuid componentGuid in componentGUIDs)
+        {
+            if (componentGuid.cachedComponent != component)
+            {
+                continue;
+            }
+
+            // Never return an invalid GUID
+            if (componentGuid.Guid == Guid.Empty && IsSerializedGuidValid(componentGuid.serializedGuid))
+            {
+                componentGuid.Guid = new Guid(componentGuid.serializedGuid);
+            }
+
+            return componentGuid.Guid;
+        }
+
+        return Guid.Empty;
+    }
+
+    /// <summary>
+    ///     Tried to get the component from a given guid.
+    /// </summary>
+    /// <param name="guid">The guid of the component to find.</param>
+    /// <returns>If found, returns the Component, otherwise null.</returns>
     public Component GetComponentFromGuid(Guid guid)
     {
         if (guid != _guid)
         {
-            return ComponentGUIDs
+            return componentGUIDs
                 .Where(c => c.Guid == guid)
-                .Select(componentGuid => componentGuid.component)
+                .Select(componentGuid => componentGuid.cachedComponent)
                 .FirstOrDefault();
         }
 
         return null;
     }
 
-    // let the manager know we are gone, so other objects no longer find this
+    // Let the manager know we are gone, so other objects no longer find this.
     public void OnDestroy()
     {
 #if UNITY_EDITOR
         _isDestroyed = true;
 
+        // This is used mainly for the case where the user deletes a GuidComponent from a prefab view.
+        // This will then go through and unregister all GuidComponents that were instances of this prefab.
         if (this && IsAssetOnDisk())
         {
             GuidManager.Remove(PrefabStageUtility.GetPrefabStage(gameObject).assetPath);
@@ -656,7 +678,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 #endif
         {
             GuidManager.Remove(_guid);
-            foreach (ComponentGuid componentGuid in ComponentGUIDs)
+            foreach (ComponentGuid componentGuid in componentGUIDs)
             {
                 GuidManager.Remove(componentGuid.Guid);
             }

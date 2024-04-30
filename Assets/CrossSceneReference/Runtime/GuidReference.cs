@@ -1,6 +1,9 @@
 ﻿using System;
 using UnityEngine;
 
+/// <summary>
+///     References a GameObject that has a GuidComponent either in the same scene, or in a different scene.
+/// </summary>
 [Serializable]
 public class GuidReference : BaseGuidReference<GameObject>
 {
@@ -8,6 +11,10 @@ public class GuidReference : BaseGuidReference<GameObject>
     public GuidReference(GuidComponent target) : base(target) {}
 }
 
+/// <summary>
+///     Reference a Component that is assigned a Guid by a GuidComponent either in the same scene, or in a different scene.
+/// </summary>
+/// <typeparam name="T">The type of the Component to reference. Type must derive from Component.</typeparam>
 [Serializable]
 public class GuidReference<T> : BaseGuidReference<T> where T : Component
 {
@@ -20,6 +27,9 @@ public class GuidReference<T> : BaseGuidReference<T> where T : Component
     public GuidReference() {}
     public GuidReference(GuidComponent target) : base(target) {}
 
+    /// <summary>
+    ///     Try and get the referenced Component. Returns null if not found.
+    /// </summary>
     public T Component
     {
         get

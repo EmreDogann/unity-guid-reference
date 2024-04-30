@@ -23,7 +23,7 @@ public class ObjectFieldDrawer
         {
             case Component component:
 #if COMPONENT_NAMES
-                label = $"{component.GetName()} ({component.gameObject.name})";
+                label = $"{cachedComponent.GetName()} ({cachedComponent.gameObject.name})";
 #else
                 label = $"{component.GetType().Name}";
 #endif

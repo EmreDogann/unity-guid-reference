@@ -67,7 +67,7 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
                 : selectedGuidObject.GuidComponent;
 
 #if COMPONENT_NAMES
-            _nameProp.stringValue = component.GetName();
+            _nameProp.stringValue = cachedComponent.GetName();
 #else
             _nameProp.stringValue = component.GetType().Name;
 #endif

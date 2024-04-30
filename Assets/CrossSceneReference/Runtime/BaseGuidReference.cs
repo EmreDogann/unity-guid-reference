@@ -5,16 +5,11 @@ using Object = UnityEngine.Object;
 using UnityEditor;
 #endif
 
-// This call is the type used by any other code to hold a reference to an object by GUID
-// If the target object is loaded, it will be returned, otherwise, NULL will be returned
-// This always works in Game Objects, so calling code will need to use GetComponent<>
-// or other methods to track down the specific objects need by any given system
-
-// Ideally this would be a struct, but we need the ISerializationCallbackReciever
+// Ideally this would be a struct, but we need the ISerializationCallbackReceiver
 [Serializable]
 public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver where T : Object
 {
-    // Cache the referenced Game Object and component if we find one for performance
+    // Cache the referenced Game Object if we find one for performance
     private protected GameObject CachedGoReference;
     private protected bool IsCacheSet;
 
@@ -31,16 +26,14 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
     private SceneAsset cachedScene;
 #endif
 
-    // Set up events to let users register to cleanup their own cached references on destroy or to cache off values
-    // public event Action<T> OnGuidAdded = delegate {};
-    // public event Action OnGuidRemoved = delegate {};
-
     // Create concrete delegates to avoid boxing.
     // When called 10,000 times, boxing would allocate ~1MB of GC Memory
     private protected Action<GameObject, Component> AddDelegate;
     private protected Action RemoveDelegate;
 
-    // Optimized accessor, and ideally the only code you ever call on this class
+    /// <summary>
+    ///     Try and get the referenced GameObject. Returns null if not found.
+    /// </summary>
     public GameObject GameObject
     {
         get
@@ -64,16 +57,17 @@ public abstract class BaseGuidReference<T> : ISerializationCallbackReceiver wher
         Guid = target.GetGuid();
     }
 
+    // If the referenced guid was registered with the GuidManager, cache its GameObject for performance.
     protected virtual void GuidAdded(GameObject go, Component component)
     {
         CachedGoReference = go;
     }
 
+    // Reset state if referenced guid was unregistered from GuidManager.
     protected virtual void GuidRemoved()
     {
         CachedGoReference = null;
         IsCacheSet = false;
-        // OnGuidRemoved();
     }
 
     // Convert system guid to a format unity likes to work with

@@ -28,12 +28,12 @@ public class GuidComponentDrawer : Editor
 
     private void UpdateComponentGuids()
     {
-        for (int i = _guidComp.ComponentGUIDs.Count - 1; i >= 0; i--)
+        for (int i = _guidComp.componentGUIDs.Count - 1; i >= 0; i--)
         {
-            if (!_guidComp.ComponentGUIDs[i].component)
+            if (!_guidComp.componentGUIDs[i].cachedComponent)
             {
-                GuidManager.Remove(_guidComp.ComponentGUIDs[i].Guid);
-                _guidComp.ComponentGUIDs.RemoveAt(i);
+                GuidManager.Remove(_guidComp.componentGUIDs[i].Guid);
+                _guidComp.componentGUIDs.RemoveAt(i);
             }
         }
 
@@ -42,22 +42,22 @@ public class GuidComponentDrawer : Editor
 
         if (components.Count == 0)
         {
-            _guidComp.ComponentGUIDs.Clear();
+            _guidComp.componentGUIDs.Clear();
         }
 
         foreach (Component component in components)
         {
             ComponentGuid componentGuid =
-                _guidComp.ComponentGUIDs.FirstOrDefault(c => c.component == component);
+                _guidComp.componentGUIDs.FirstOrDefault(c => c.cachedComponent == component);
             if (componentGuid == null)
             {
-                componentGuid = new ComponentGuid { component = component };
-                _guidComp.ComponentGUIDs.Add(componentGuid);
+                componentGuid = new ComponentGuid { cachedComponent = component };
+                _guidComp.componentGUIDs.Add(componentGuid);
             }
 
-            _guidComp.CreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
-                componentGuid.editorSerializedGuid);
-            componentGuid.editorSerializedGuid = componentGuid.serializedGuid;
+            _guidComp.CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
+                componentGuid.SerializedGuid_Editor);
+            componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
         }
     }
 
@@ -65,7 +65,7 @@ public class GuidComponentDrawer : Editor
     {
         serializedObject.Update();
 
-        _serializedGuidProp = serializedObject.FindProperty("_serializedGuid");
+        _serializedGuidProp = serializedObject.FindProperty("serializedGuid");
         Initialize();
 
         if (EditorUtility.IsDirty(_guidComp.gameObject))
@@ -88,9 +88,9 @@ public class GuidComponentDrawer : Editor
                 {
                     string label = "";
 #if COMPONENT_NAMES
-                    label = $"{componentGuid.component.GetName()}:";
+                    label = $"{componentGuid.cachedComponent.GetName()}:";
 #else
-                    label = $"{componentGuid.component.GetType().Name}:";
+                    label = $"{componentGuid.cachedComponent.GetType().Name}:";
 #endif
                     EditorGUILayout.LabelField(label, componentGuid.Guid.ToString());
                 }

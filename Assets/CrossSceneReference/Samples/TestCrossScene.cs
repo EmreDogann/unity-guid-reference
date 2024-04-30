@@ -5,7 +5,6 @@ public class TestCrossScene : MonoBehaviour
 {
     public GuidReference gameObjectRef = new GuidReference();
     public GuidReference<MeshRenderer> rendererRef = new GuidReference<MeshRenderer>();
-    public TestComponent component;
 
     private void Update()
     {
