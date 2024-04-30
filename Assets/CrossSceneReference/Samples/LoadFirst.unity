@@ -139,7 +139,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &690392694
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -154,7 +154,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scenes:
   - name: LoadSecond
-    shouldLoad: 1
+    shouldLoad: 0
 --- !u!4 &690392695
 Transform:
   m_ObjectHideFlags: 0
@@ -389,7 +389,6 @@ MonoBehaviour:
     cachedName: MeshRenderer
     cachedScene: {fileID: 102900000, guid: 8acfd1b1a375f2049a2dde40d955ce3f, type: 3}
     cachedGOName: CrossSceneTarget
-  component: {fileID: 0}
 --- !u!1 &1164708736
 GameObject:
   m_ObjectHideFlags: 0
