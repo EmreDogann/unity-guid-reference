@@ -19,7 +19,8 @@ public class ComponentGuid : IEquatable<ComponentGuid>
     public Guid Guid;
     public byte[] serializedGuid;
 
-    // Store a copy of serializedGuid in a NonSerialized field so we don't lose the GUID on Reset()
+    // Store a copy of serializedGuid in a NonSerialized field, so we don't lose the GUID on Reset()
+    // See GuidComponent.serializedGuid_Editor for more details about this.
 #if UNITY_EDITOR
     [NonSerialized] public byte[] SerializedGuid_Editor;
 #endif
@@ -117,6 +118,9 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     private readonly List<ComponentGuid> componentGUIDs_dump = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
+    // This non-serialized copy of the serializedGuid is for editor use only.
+    // It is intended to circumvent the issue of Guids being regenerated in a prefab when applying or reverting prefab modifications.
+    // It attempts to do this as the non-serialized value does not get cleared on prefab apply or revert or operations of that nature.
     private byte[] serializedGuid_Editor;
     private bool _isDestroyed;
 #endif
@@ -258,7 +262,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         {
 #if UNITY_EDITOR
             // If we need to create a new GUID but there is already one assigned via serializedGuid_Editor, just use that.
-            // This is useful for things like Resetting in editor and applying prefabs.
+            // This is useful for things like resetting and applying prefabs.
             if (IsSerializedGuidValid(serializedGuid_Editor))
             {
                 serializedGuid = serializedGuid_Editor;
