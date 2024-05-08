@@ -17,7 +17,7 @@
   },
   "samples": [
     {
-      "displayName": "Simple Usage Example",
+      "displayName": "Simple Usage",
       "description": "Contains a test scene and a test MonoBehaviour to showcase the basic usage of the package.",
       "path": "Samples~/SimpleUsage"
     }
