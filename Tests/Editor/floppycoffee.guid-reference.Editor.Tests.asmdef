@@ -1,0 +1,23 @@
+{
+    "name": "floppycoffee.guid-reference.Editor.Tests",
+    "rootNamespace": "",
+    "references": [
+        "GUID:56bf217733fbea44ba8528c48e965b20",
+        "GUID:af2616137ce427846aef93295bc80bdf",
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,25 @@
+{
+    "name": "floppycoffee.guid-reference.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:56bf217733fbea44ba8528c48e965b20",
+        "GUID:dd59ccde2a8bfc34fb17f834ba257ab2"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.sisus.component-names",
+            "expression": "1.0.9",
+            "define": "COMPONENT_NAMES"
+        }
+    ],
+    "noEngineReferences": false
+}

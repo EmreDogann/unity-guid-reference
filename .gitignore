@@ -82,3 +82,9 @@ crashlytics-build.properties
 # Archives' meta files
 *.zip.meta
 *.rar.meta
+
+# Unity Custom Package-specific ignores
+[Aa]ssets/
+[Pp]roject[Ss]ettings/
+manifest.json
+packages-lock.json

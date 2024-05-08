@@ -1,0 +1,18 @@
+{
+  "name": "com.floppycoffee.guid-reference",
+  "version": "1.0.1",
+  "displayName": "Unity Guid Reference",
+  "description": "Globaly Unique IDentifier (GUID) for Game Objects and Components.",
+  "unity": "2018.3",
+  "documentationUrl": "https://github.com/EmreDogann/unity-guid-reference/blob/master/README.md",
+  "changelogUrl": "https://example.com/changelog.html",
+  "licensesUrl": "https://github.com/EmreDogann/unity-guid-reference/blob/master/LICENSE.md",
+  "keywords": [
+    "guid",
+    "reference"
+  ],
+  "author": {
+    "name": "Emre Dogan",
+    "url": "https://github.com/EmreDogann"
+  }
+}
