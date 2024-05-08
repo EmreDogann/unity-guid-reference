@@ -19,7 +19,7 @@
     {
       "displayName": "Simple Usage Example",
       "description": "Contains a test scene and a test MonoBehaviour to showcase the basic usage of the package.",
-      "path": "Samples~/SimpleUsageExample"
+      "path": "Samples~/SimpleUsage"
     }
   ]
 }

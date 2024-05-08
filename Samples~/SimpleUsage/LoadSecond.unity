@@ -240,17 +240,17 @@ MonoBehaviour:
   m_GameObject: {fileID: 959225784}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 98bbc2c1e63e98543830eec78d976795, type: 3}
+  m_Script: {fileID: 11500000, guid: 3207c0d69694a2642bf725cc77684f0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serializedGuid: cd7b9469e836ba4b8d8a4136a59141cc
+  serializedGuid: 4dae8d90a1559a4ba01b129108cb6351
   componentGUIDs:
   - cachedComponent: {fileID: 959225787}
-    serializedGuid: 34b7e8044f19ee4ab57a58dbefcf26ed
+    serializedGuid: fdfbe92fed3c354189074f835d5f558d
   - cachedComponent: {fileID: 959225786}
-    serializedGuid: 546049ba046e0340bc9b31f74865d4ff
+    serializedGuid: 30d6a995544e9a469072c9aef1733bb3
   - cachedComponent: {fileID: 959225790}
-    serializedGuid: 081d003f2266df43881c5fb5405e2ce0
+    serializedGuid: e0df138762ff4b4d8be2abc5ea1aecd5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

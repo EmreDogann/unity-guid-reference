@@ -132,7 +132,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 690392695}
-  - component: {fileID: 690392694}
+  - component: {fileID: 690392696}
   m_Layer: 0
   m_Name: SceneLoader
   m_TagString: Untagged
@@ -140,21 +140,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &690392694
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 690392693}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f1c3a067d9be6204c9e067023c1c768b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  scenes:
-  - name: LoadSecond
-    shouldLoad: 0
 --- !u!4 &690392695
 Transform:
   m_ObjectHideFlags: 0
@@ -170,6 +155,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &690392696
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690392693}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 342cccaca75443844a6111e1cc775e0e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  scenes:
+  - name: LoadSecond
+    shouldLoad: 0
 --- !u!1 &811793634
 GameObject:
   m_ObjectHideFlags: 0
@@ -377,17 +377,17 @@ MonoBehaviour:
   m_GameObject: {fileID: 959225784}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dac07e8eb76e66a4fa8c4fe45f186fc4, type: 3}
+  m_Script: {fileID: 11500000, guid: fa699e45c9d4a4041ae3a4b9095effab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   gameObjectRef:
-    serializedGuid: cd7b9469e836ba4b8d8a4136a59141cc
+    serializedGuid: 4dae8d90a1559a4ba01b129108cb6351
     cachedName: CrossSceneTarget
-    cachedScene: {fileID: 102900000, guid: 8acfd1b1a375f2049a2dde40d955ce3f, type: 3}
+    cachedScene: {fileID: 102900000, guid: 95090c2c952b2544a95f3cc3cf026608, type: 3}
   rendererRef:
-    serializedGuid: 081d003f2266df43881c5fb5405e2ce0
+    serializedGuid: e0df138762ff4b4d8be2abc5ea1aecd5
     cachedName: MeshRenderer
-    cachedScene: {fileID: 102900000, guid: 8acfd1b1a375f2049a2dde40d955ce3f, type: 3}
+    cachedScene: {fileID: 102900000, guid: 95090c2c952b2544a95f3cc3cf026608, type: 3}
     cachedGOName: CrossSceneTarget
 --- !u!1 &1164708736
 GameObject:
