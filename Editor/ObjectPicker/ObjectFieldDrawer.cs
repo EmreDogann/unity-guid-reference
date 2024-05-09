@@ -14,6 +14,8 @@ public class ObjectFieldDrawer
     private readonly Func<Object, GUIContent> _objectLabelGetter;
     private readonly Type fieldType;
 
+    private static readonly Type MonoBehaviourType = typeof(MonoBehaviour);
+
     public Rect FieldRect { get; private set; }
 
     public static GUIContent DefaultObjectLabelGetter(Object obj, string typeName)
@@ -159,6 +161,11 @@ public class ObjectFieldDrawer
             : EditorGUIUtility.ObjectContent(null, fieldType).image;
         objectToDrawLabel.image = null;
 
+        if (!icon && IsSameOrSubclass(MonoBehaviourType, fieldType))
+        {
+            icon = EditorGUIUtility.ObjectContent(null, typeof(MonoScript)).image;
+        }
+
         EditorGUI.LabelField(labelRect, objectToDrawLabel, labelStyle);
         GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
 
@@ -228,4 +235,11 @@ public class ObjectFieldDrawer
 
         return false;
     }
+
+    bool IsSameOrSubclass(Type potentialBase, Type potentialDescendant)
+    {
+        return potentialDescendant.IsSubclassOf(potentialBase)
+               || potentialDescendant == potentialBase;
+    }
+
 }
