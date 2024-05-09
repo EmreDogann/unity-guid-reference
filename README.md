@@ -17,12 +17,15 @@ If you want to learn more about this plugin, please see this fantastic [video](h
 - All the while trying to keep the runtime performance overhead and garbage generation to a minimum.
 
 ## How To Install
-Simply download this repository as a .zip file and extract into your project!
+To install the package, go to **Package Manager -> Add package from git URL**, and add:
+```
+https://github.com/EmreDogann/unity-guid-reference.git
+```
 
 ## How To Use
-> The included sample at `CrossSceneReference/Samples` demonstrates a basic usage.
+> You can optionally install a sample showcasing basic usage of the package in the **Samples** tab of the package's description.
 >
-> Simply load the `LoadFirst.unity` scene and press play to see the plugin in action! Use the `SceneLoader` game object to load `LoadSecond.unity`.
+> In the sample, simply load the `LoadFirst.unity` scene and press play to see the plugin in action! Use the `SceneLoader` game object to load `LoadSecond.unity`.
 >
 > You should see the `CrossSceneReferencer` object in LoadFirst find the `CrossSceneTarget` object in LoadSecond, and set both of them to start spinning.
 
