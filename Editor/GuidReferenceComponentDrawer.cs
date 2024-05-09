@@ -118,8 +118,6 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
         Initialize(property);
         position.height = EditorGUIUtility.singleLineHeight;
 
-        _guidProp.serializedObject.Update();
-
         // Using BeginProperty / EndProperty on the parent property means that
         // prefab override logic works on the entire property.
         EditorGUI.BeginProperty(position, label, property);
