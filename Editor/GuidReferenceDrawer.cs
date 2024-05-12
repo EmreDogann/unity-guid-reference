@@ -176,7 +176,7 @@ public class GuidReferenceDrawer : PropertyDrawer
             guidCompPosition.width = fieldRect.width - BUTTON_WIDTH - BUTTON_PADDING;
 
             // If our object is loaded, we can simply use an object field directly
-            _fieldDrawer.DrawField(guidCompPosition, GUIContent.none, currentComponent);
+            _fieldDrawer.DrawField(guidCompPosition, GUIContent.none, currentGameObject);
 
             Rect settingsRect = new Rect(guidCompPosition);
             settingsRect.width = BUTTON_WIDTH;
