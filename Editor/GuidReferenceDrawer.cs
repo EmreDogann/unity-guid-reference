@@ -112,7 +112,7 @@ public class GuidReferenceDrawer : PropertyDrawer
         EditorGUI.BeginProperty(position, label, property);
 
         // Draw prefix label, returning the new rect we can draw in
-        // Rect guidCompPosition = EditorGUI.PrefixLabel(position, GUIUtility.GetControlID(FocusType.Passive), label);
+        Rect fieldRect = EditorGUI.PrefixLabel(position, GUIUtility.GetControlID(FocusType.Passive), label);
 
         // Working with array properties is a bit unwieldy
         // you have to get the property at each index manually
@@ -135,7 +135,7 @@ public class GuidReferenceDrawer : PropertyDrawer
         }
 
         // Debug.Log($"Guid: {currentGuid}, Component: {currentGameObject?.name}");
-        if (currentGuid != Guid.Empty && currentGameObject == null)
+        if (currentGuid != Guid.Empty && !currentGameObject)
         {
             Rect guidCompPosition = EditorGUI.PrefixLabel(position, GUIUtility.GetControlID(FocusType.Passive), label);
             // if our reference is set, but the target isn't loaded, we display the target and the scene it is in, and provide a way to clear the reference
@@ -171,22 +171,16 @@ public class GuidReferenceDrawer : PropertyDrawer
         }
         else
         {
-            // Magic number "* 2.0f" - used to match start of picker button.
-            bool shouldAutoSize = EditorGUIUtility.labelWidth >
-                                  EditorGUIUtility.currentViewWidth - BUTTON_WIDTH * NUM_OF_BUTTONS -
-                                  BUTTON_PADDING * 2.0f;
+            Rect guidCompPosition = new Rect(fieldRect);
+            guidCompPosition.x = fieldRect.xMin;
+            guidCompPosition.width = fieldRect.width - BUTTON_WIDTH - BUTTON_PADDING;
 
-            Rect settingsRect = position;
+            // If our object is loaded, we can simply use an object field directly
+            _fieldDrawer.DrawField(guidCompPosition, GUIContent.none, currentComponent);
+
+            Rect settingsRect = new Rect(guidCompPosition);
             settingsRect.width = BUTTON_WIDTH;
-            settingsRect.x = EditorGUIUtility.currentViewWidth - BUTTON_WIDTH - BUTTON_PADDING;
-            // Magic "1.0f" used for visual padding.
-            settingsRect.xMax += 1.0f +
-                                 (shouldAutoSize
-                                     ? EditorGUIUtility.labelWidth - EditorGUIUtility.currentViewWidth +
-                                       BUTTON_WIDTH * NUM_OF_BUTTONS +
-                                       BUTTON_PADDING
-                                     : 0.0f);
-            settingsRect.xMin = settingsRect.xMax - BUTTON_WIDTH;
+            settingsRect.x += fieldRect.width - BUTTON_WIDTH;
 
             bool settingsPressed = EditorGUI.DropdownButton(settingsRect, EditorGUIUtility.IconContent("_Popup"),
                 FocusType.Keyboard,
@@ -196,27 +190,15 @@ public class GuidReferenceDrawer : PropertyDrawer
                 GenericMenu menu = CreateContextMenu(settingsRect, currentGuid);
                 menu.ShowAsContext();
             }
-
-            Rect guidCompPosition = new Rect(settingsRect);
-            guidCompPosition.xMin = position.xMin;
-            guidCompPosition.xMax -= BUTTON_WIDTH + BUTTON_PADDING;
-
-            // If our object is loaded, we can simply use an object field directly
-            _fieldDrawer.DrawField(guidCompPosition, label, currentGameObject);
         }
 
         if (_showExtraInfo)
         {
-            bool shouldAutoSize = EditorGUIUtility.labelWidth > EditorGUIUtility.currentViewWidth - 22.0f;
             EditorGUI.indentLevel++;
 
             Rect extraInfoRect = position;
             extraInfoRect.y += EditorGUIUtility.singleLineHeight + LINE_PADDING * 2.0f;
-            extraInfoRect.xMax -= BUTTON_PADDING;
-            extraInfoRect.xMax +=
-                shouldAutoSize
-                    ? EditorGUIUtility.labelWidth - EditorGUIUtility.currentViewWidth + 22.0f
-                    : 0.0f;
+            extraInfoRect.xMax -= 1.0f; // Magic number for alignment.
 
             using (new EditorGUI.DisabledScope(true))
             {
@@ -229,6 +211,7 @@ public class GuidReferenceDrawer : PropertyDrawer
 
             EditorGUI.indentLevel--;
         }
+
 
         EditorGUI.EndProperty();
     }

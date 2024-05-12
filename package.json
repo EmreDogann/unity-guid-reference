@@ -1,6 +1,6 @@
 {
   "name": "com.floppycoffee.guid-reference",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "displayName": "Unity Guid Reference",
   "description": "Globaly Unique IDentifier (GUID) for Game Objects and Components.",
   "unity": "2018.3",

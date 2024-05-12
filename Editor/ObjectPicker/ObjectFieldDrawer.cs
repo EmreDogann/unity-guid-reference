@@ -67,14 +67,20 @@ public class ObjectFieldDrawer
         }
 
         GUI.SetNextControlName("ObjectField");
-        Rect dropBoxRect = EditorGUI.PrefixLabel(position, label);
+        Rect dropBoxRect = label != GUIContent.none ? EditorGUI.PrefixLabel(position, label) : position;
+        FieldRect = dropBoxRect;
 
-        Rect buttonRect = dropBoxRect;
+        Rect buttonRect = new Rect(dropBoxRect);
         buttonRect.xMin = dropBoxRect.xMax - 19f;
         buttonRect.xMax = dropBoxRect.xMax;
         buttonRect = new RectOffset(0, -1, -1, -1).Add(buttonRect);
 
-        FieldRect = dropBoxRect;
+        // Stops object field at object picker button when inspector width is too small.
+        // Magic numbers for alignment.
+        if (dropBoxRect.width < buttonRect.width + 2.0f)
+        {
+            dropBoxRect.xMin = buttonRect.xMin - 1.0f;
+        }
 
         // we have to manually handle the mouse down events cause GUI.Button eats them
         if (GUI.enabled)
@@ -146,11 +152,11 @@ public class ObjectFieldDrawer
         GUI.Toggle(dropBoxRect, dropBoxRect.Contains(Event.current.mousePosition) && GetDraggedObjectIfValid(),
             GUIContent.none, EditorStyles.objectField);
 
-        Rect iconRect = dropBoxRect;
+        Rect iconRect = new Rect(dropBoxRect);
         iconRect.center += Vector2.right * 3f;
         iconRect.width = 12f;
 
-        Rect labelRect = dropBoxRect;
+        Rect labelRect = new Rect(dropBoxRect);
         labelRect.xMin += iconRect.width + 2f;
 
         GUIStyle labelStyle = new GUIStyle(EditorStyles.objectField);
@@ -159,12 +165,13 @@ public class ObjectFieldDrawer
         Texture icon = objectToDrawLabel.image
             ? objectToDrawLabel.image
             : EditorGUIUtility.ObjectContent(null, fieldType).image;
-        objectToDrawLabel.image = null;
 
         if (!icon && IsSameOrSubclass(MonoBehaviourType, fieldType))
         {
             icon = EditorGUIUtility.ObjectContent(null, typeof(MonoScript)).image;
         }
+
+        objectToDrawLabel.image = null;
 
         EditorGUI.LabelField(labelRect, objectToDrawLabel, labelStyle);
         GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
@@ -173,6 +180,7 @@ public class ObjectFieldDrawer
         GUI.Button(buttonRect, new GUIContent(""), objectFieldButtonStyle);
 
         return activeObject;
+
     }
 
     private Object GetPingableObject(Object activeObject)
