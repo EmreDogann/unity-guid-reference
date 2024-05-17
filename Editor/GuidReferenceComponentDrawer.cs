@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 #if COMPONENT_NAMES
@@ -36,23 +37,31 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
 
     private void Initialize(SerializedProperty property)
     {
+        _guidProp = property.FindPropertyRelative("serializedGuid");
+        _nameProp = property.FindPropertyRelative("cachedName");
+        _goNameProp = property.FindPropertyRelative("cachedGOName");
+        _sceneProp = property.FindPropertyRelative("cachedScene");
+
+        SceneAsset sceneAsset = (SceneAsset)_sceneProp.objectReferenceValue;
+        if (sceneAsset)
+        {
+            sceneName = sceneAsset.name;
+        }
+
+        _showExtraInfo = _guidProp.isExpanded;
+
         if (!_isInit)
         {
-            _guidProp = property.FindPropertyRelative("serializedGuid");
-            _nameProp = property.FindPropertyRelative("cachedName");
-            _goNameProp = property.FindPropertyRelative("cachedGOName");
-            _sceneProp = property.FindPropertyRelative("cachedScene");
-
-            sceneName = AssetDatabase.GetAssetOrScenePath(_sceneProp.objectReferenceValue)
-                .TrimEnd(".unity".ToCharArray());
-            sceneName = sceneName.Split('/')[^1];
-
             _targetType = fieldInfo.FieldType.GetGenericArguments()[0];
+            // Drill down into the type if it is multiple nested types/generic types.
+            while (GetArrayOrListElementType(_targetType) != null)
+            {
+                _targetType = GetArrayOrListElementType(_targetType);
+            }
 
             _fieldDrawer = new GuidObjectField(_targetType, new MultiSceneComponentsProvider(_targetType));
             _fieldDrawer.OnObjectChanged += OnObjectChanged;
 
-            _showExtraInfo = _guidProp.isExpanded;
             _isInit = true;
         }
     }
@@ -110,7 +119,6 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
         Initialize(property);
         return _fieldDrawer.GetPropertyHeight(property, label) +
                (_showExtraInfo ? EditorGUIUtility.singleLineHeight * 2 + 6.0f : 0.0f);
-        ;
     }
 
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -259,5 +267,25 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
             () => { EditorGUIUtility.systemCopyBuffer = currentGuid.ToString("N"); });
 
         return menu;
+    }
+
+    internal static bool IsArrayOrList(Type listType)
+    {
+        if (listType.IsArray)
+        {
+            return true;
+        }
+
+        return listType.IsGenericType && listType.GetGenericTypeDefinition() == typeof(List<>);
+    }
+
+    internal static Type GetArrayOrListElementType(Type listType)
+    {
+        if (listType.IsArray)
+        {
+            return listType.GetElementType();
+        }
+
+        return listType.IsGenericType ? listType.GetGenericArguments()[0] : null;
     }
 }

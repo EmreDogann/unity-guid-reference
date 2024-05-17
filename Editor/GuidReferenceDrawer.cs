@@ -32,20 +32,23 @@ public class GuidReferenceDrawer : PropertyDrawer
 
     private void Initialize(SerializedProperty property)
     {
+        _guidProp = property.FindPropertyRelative("serializedGuid");
+        _nameProp = property.FindPropertyRelative("cachedName");
+        _sceneProp = property.FindPropertyRelative("cachedScene");
+
+        SceneAsset sceneAsset = (SceneAsset)_sceneProp.objectReferenceValue;
+        if (sceneAsset)
+        {
+            sceneName = sceneAsset.name;
+        }
+
+        _showExtraInfo = _guidProp.isExpanded;
+
         if (!_isInit)
         {
-            _guidProp = property.FindPropertyRelative("serializedGuid");
-            _nameProp = property.FindPropertyRelative("cachedName");
-            _sceneProp = property.FindPropertyRelative("cachedScene");
-
-            sceneName = AssetDatabase.GetAssetOrScenePath(_sceneProp.objectReferenceValue)
-                .TrimEnd(".unity".ToCharArray());
-            sceneName = sceneName.Split('/')[^1];
-
             _fieldDrawer = new GuidObjectField(_targetType, new MultiSceneComponentsProvider(_targetType));
             _fieldDrawer.OnObjectChanged += OnObjectChanged;
 
-            _showExtraInfo = _guidProp.isExpanded;
             _isInit = true;
         }
     }
