@@ -16,13 +16,13 @@ If you want to learn more about this plugin, please see this fantastic [video](h
 - Added optional support for [Sisus' Component Names](https://assetstore.unity.com/packages/tools/utilities/component-names-212478).
 - All the while trying to keep the runtime performance overhead and garbage generation to a minimum.
 
-## How To Install
+## Installation
 To install the package, go to **Package Manager -> Add package from git URL**, and add:
 ```
 https://github.com/EmreDogann/unity-guid-reference.git
 ```
 
-## How To Use
+## Usage
 > You can optionally install a sample showcasing basic usage of the package in the **Samples** tab of the package's description.
 >
 > In the sample, simply load the `LoadFirst.unity` scene and press play to see the plugin in action! Use the `SceneLoader` game object to load `LoadSecond.unity`.
