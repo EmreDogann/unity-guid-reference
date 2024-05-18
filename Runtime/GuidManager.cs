@@ -302,11 +302,6 @@ public class GuidManager
 
         if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
         {
-            if (!info.GuidComponent)
-            {
-                return null;
-            }
-
             if (onAddCallback != null)
             {
                 info.OnAdd += onAddCallback;
@@ -318,7 +313,7 @@ public class GuidManager
             }
 
             _guidToObjectMap[guid] = info;
-            return info.GuidComponent.gameObject;
+            return !info.GuidComponent ? null : info.GuidComponent.gameObject;
         }
 
         if (onAddCallback != null)
@@ -346,11 +341,6 @@ public class GuidManager
 
         if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
         {
-            if (!info.GuidComponent)
-            {
-                return null;
-            }
-
             if (onAddCallback != null)
             {
                 info.OnAdd += onAddCallback;
@@ -362,7 +352,7 @@ public class GuidManager
             }
 
             _guidToObjectMap[guid] = info;
-            return info.GuidComponent.GetComponentFromGuid(guid) as T;
+            return !info.GuidComponent ? null : info.GuidComponent.GetComponentFromGuid(guid) as T;
         }
 
         if (onAddCallback != null)
