@@ -131,9 +131,9 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
 
                     string label = "";
 #if COMPONENT_NAMES
-                    label = $"{cachedComponent.GetName()} ({cachedComponent.gameObject.name})";
+                    label = $"{component.gameObject.name} ({component.GetName()})";
 #else
-                    label = $"{component.name}";
+                    label = $"{component.gameObject.name} ({component.GetType().Name})";
 #endif
 
                     item = new AdvancedDropdownItem(label)
@@ -208,9 +208,9 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
                 case Component component:
                     string label = "";
 #if COMPONENT_NAMES
-                    label = $"{cachedComponent.GetName()} ({cachedComponent.gameObject.name})";
+                    label = $"{component.gameObject.name} ({component.GetName()})";
 #else
-                    label = $"{component.GetType().Name}";
+                    label = $"{component.gameObject.name} ({component.GetType().Name})";
 #endif
 
                     item = new AdvancedDropdownItem(label)

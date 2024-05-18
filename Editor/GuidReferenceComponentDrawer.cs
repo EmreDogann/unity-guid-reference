@@ -161,7 +161,7 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
             float buttonWidth = 19.0f;
             guidCompPosition.xMax -= buttonWidth + BUTTON_PADDING * 2.0f;
 
-            warningLabel.text = $" {_nameProp.stringValue} -> {_goNameProp.stringValue} -> {sceneName}";
+            warningLabel.text = $" {_goNameProp.stringValue} ({_nameProp.stringValue}) -> {sceneName}";
             warningLabel.tooltip =
                 $"Reference was not found / is not loaded.\n-------------------------------------\n<b>{_nameProp.stringValue}</b> (Component)\n\tv\n<b>{_goNameProp.stringValue}</b> (Game Object)\n\tv\n<b>{sceneName}</b> (Scene)";
 
