@@ -164,7 +164,7 @@ public class GuidObjectField
             objectProvider,
             $"Select [{ObjectNames.NicifyVariableName(_referenceType.Name)}]",
             new AdvancedDropdownState(),
-            info => info.Obj.GetType() == _referenceType,
+            info => info.Obj.GetType() == _referenceType || info.Obj.GetType().IsSubclassOf(_referenceType),
             obj =>
             {
                 if (!_isTargetTypeGameObject && obj is GuidComponent guidComponent)

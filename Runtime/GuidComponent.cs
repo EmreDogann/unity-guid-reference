@@ -39,14 +39,14 @@ public class ComponentGuid : IEquatable<ComponentGuid>
         this.serializedGuid = serializedGuid;
     }
 
-    public bool IsType(Type type)
+    public bool IsTypeOrSubclassOf(Type type)
     {
-        return cachedComponent.GetType() == type;
+        return cachedComponent.GetType() == type || cachedComponent.GetType().IsSubclassOf(type);
     }
 
-    public bool IsType<T>() where T : Component
+    public bool IsTypeOrSubclassOf<T>() where T : Component
     {
-        return cachedComponent.GetType() == typeof(T);
+        return cachedComponent.GetType() == typeof(T) || cachedComponent.GetType().IsSubclassOf(typeof(T));
     }
 
     public bool Equals(ComponentGuid other)
@@ -236,7 +236,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf(Type T)
     {
-        return componentGUIDs.FindAll(componentGuid => componentGuid.IsType(T)).Count > 1;
+        return componentGUIDs.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf(T)).Count > 1;
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf<T>() where T : Component
     {
-        return componentGUIDs.FindAll(componentGuid => componentGuid.IsType<T>()).Count > 1;
+        return componentGUIDs.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf<T>()).Count > 1;
     }
 
     // When de-serializing or creating this GuidComponent, we want to either restore our serialized GUID or create a new one.
@@ -601,7 +601,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
         foreach (ComponentGuid componentGuid in componentGUIDs)
         {
-            if (!componentGuid.IsType(type))
+            if (!componentGuid.IsTypeOrSubclassOf(type))
             {
                 continue;
             }
