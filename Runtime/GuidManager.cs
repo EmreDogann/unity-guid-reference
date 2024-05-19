@@ -388,7 +388,7 @@ public class GuidManager
             Component component = info.GuidComponent.GetComponentFromGuid(guid);
             if (component)
             {
-                if (component.GetType() == type)
+                if (component.GetType() == type || component.GetType().IsSubclassOf(type))
                 {
                     return component;
                 }
