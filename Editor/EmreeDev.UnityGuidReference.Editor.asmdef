@@ -1,0 +1,24 @@
+{
+    "name": "EmreeDev.UnityGuidReference.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:a38a6202e3971774db63a299b02b0c57"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.sisus.component-names",
+            "expression": "1.0.9",
+            "define": "COMPONENT_NAMES"
+        }
+    ],
+    "noEngineReferences": false
+}
