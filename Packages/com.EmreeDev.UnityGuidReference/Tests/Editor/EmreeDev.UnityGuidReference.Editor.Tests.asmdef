@@ -1,9 +1,9 @@
 {
-    "name": "floppycoffee.guid-reference.Editor.Tests",
+    "name": "EmreeDev.UnityGuidReference.Editor.Tests",
     "rootNamespace": "",
     "references": [
-        "GUID:56bf217733fbea44ba8528c48e965b20",
-        "GUID:af2616137ce427846aef93295bc80bdf",
+        "GUID:306103984f660d34983ec334a8835f27",
+        "GUID:a38a6202e3971774db63a299b02b0c57",
         "GUID:27619889b8ba8c24980f49ee34dbb44a",
         "GUID:0acc523941302664db1f4e527237feb3"
     ],
@@ -16,8 +16,10 @@
     "precompiledReferences": [
         "nunit.framework.dll"
     ],
-    "autoReferenced": true,
-    "defineConstraints": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

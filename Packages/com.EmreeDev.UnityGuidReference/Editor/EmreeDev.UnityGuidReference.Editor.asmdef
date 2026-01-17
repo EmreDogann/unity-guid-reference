@@ -1,9 +1,8 @@
 {
-    "name": "floppycoffee.guid-reference.Editor",
+    "name": "EmreeDev.UnityGuidReference.Editor",
     "rootNamespace": "",
     "references": [
-        "GUID:56bf217733fbea44ba8528c48e965b20",
-        "GUID:dd59ccde2a8bfc34fb17f834ba257ab2"
+        "GUID:a38a6202e3971774db63a299b02b0c57"
     ],
     "includePlatforms": [
         "Editor"

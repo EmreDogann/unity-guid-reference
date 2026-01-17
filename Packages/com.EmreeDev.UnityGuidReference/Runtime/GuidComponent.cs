@@ -426,6 +426,8 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     private void Awake()
     {
 #if UNITY_EDITOR
+        PrefabUtility.prefabInstanceReverting += PrefabUtilityOnprefabInstanceReverting;
+
         CreateOrRegisterGuid(ref _guid, ref serializedGuid, serializedGuid_Editor);
         serializedGuid_Editor = serializedGuid;
 
@@ -455,6 +457,14 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid);
         }
 #endif
+    }
+
+    private bool _isAttemptingPrefabRevert;
+
+    private void PrefabUtilityOnprefabInstanceReverting(GameObject obj)
+    {
+        _isAttemptingPrefabRevert = true;
+        Debug.Log("reverting");
     }
 
 #if UNITY_EDITOR
@@ -496,6 +506,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     private void OnValidate()
     {
+        Debug.Log("onValidate");
         // Similar to on Serialize, but gets called on Copying a Component or Applying a Prefab
         // at a time that lets us detect what we are
         if (IsAssetOnDisk())
@@ -670,8 +681,15 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     public void OnDestroy()
     {
 #if UNITY_EDITOR
+        PrefabUtility.prefabInstanceReverting -= PrefabUtilityOnprefabInstanceReverting;
         _isDestroyed = true;
+        if (_isAttemptingPrefabRevert)
+        {
+            _isAttemptingPrefabRevert = false;
+            return;
+        }
 
+        Debug.Log("destroy");
         // This is used mainly for the case where the user deletes a GuidComponent from a prefab view.
         // This will then go through and unregister all GuidComponents that were instances of this prefab.
         if (this && IsAssetOnDisk())

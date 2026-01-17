@@ -1,0 +1,27 @@
+{
+	"name": "com.emreedev.unityguidreference",
+	"displayName":"Unity Guid Reference",
+	"version": "1.0.8",
+	"unity": "6000.3",
+	"description": "Globaly Unique IDentifier (GUID) for Game Objects and Components.",
+	"dependencies": {
+		"com.unity.test-framework": "1.6.0"
+	},
+  "documentationUrl": "https://github.com/EmreDogann/unity-guid-reference/blob/master/README.md",
+  "licensesUrl": "https://github.com/EmreDogann/unity-guid-reference/blob/master/LICENSE.md",
+  "keywords": [
+    "guid",
+    "reference"
+  ],
+  "author": {
+    "name": "Emre Dogan",
+    "url": "https://github.com/EmreDogann"
+  },
+  "samples": [
+    {
+      "displayName": "Simple Usage",
+      "description": "Contains a test scene and a simple MonoBehaviour to showcase the basic usage of the package.",
+      "path": "Samples~/SimpleUsage"
+    }
+  ]
+}

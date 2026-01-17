@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+    branches:
+    - develop
+jobs:
+  split-upm:
+    name: split develop branch (force)
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+      contents: write
+      statuses: write
+      actions: write
+      checks: read
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: split develop branch
+      run: |
+        git branch -d master &> /dev/null || echo master branch not found
+        git subtree split -P "$PKG_ROOT" -b master
+        git checkout master
+        if [[ -d "Samples" ]]; then
+          git mv Samples Samples~
+          rm -f Samples.meta
+          git config --global user.name 'github-bot'
+          git config --global user.email 'github-bot@users.noreply.github.com'
+          git commit -am "fix: Samples => Samples~"
+        fi
+        git push -f -u origin master
+      env:
+        PKG_ROOT: Packages/com.EmreeDev.UnityGuidReference

@@ -5,7 +5,7 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace SceneHandling.Editor.UI.Controls
+namespace Packages.com.EmreeDev.UnityGuidReference.Editor
 {
     public class GuidManagerDebugWindow : EditorWindow
     {

@@ -41,6 +41,9 @@ public class GuidManager
     // Singleton interface
     private static GuidManager _instance;
 
+    // Instance data
+    private readonly Dictionary<Guid, GuidInfo> _guidToObjectMap;
+
     // All the public API is static so you need not worry about creating an instance
     public static bool Add(Guid guid, GuidComponent guidComponent)
     {
@@ -156,8 +159,15 @@ public class GuidManager
         return _instance.InternalExistsGuid(guid);
     }
 
-    // instance data
-    private readonly Dictionary<Guid, GuidInfo> _guidToObjectMap;
+    public static bool OrphanGuid(Guid guid)
+    {
+        if (_instance == null)
+        {
+            _instance = new GuidManager();
+        }
+
+        return _instance.InternalOrphanGuid(guid);
+    }
 
 #if UNITY_EDITOR
     internal static Dictionary<Guid, GuidInfo> GetGuidInfos
@@ -184,6 +194,16 @@ public class GuidManager
     private bool InternalExistsGuid(Guid guid)
     {
         return _guidToObjectMap.ContainsKey(guid);
+    }
+
+    private bool InternalOrphanGuid(Guid guid)
+    {
+        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
+        {
+            info.GuidComponent = null;
+        }
+
+        return false;
     }
 
     private bool InternalAdd(Guid guid, GuidComponent guidComponent)
