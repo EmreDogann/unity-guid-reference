@@ -1,6 +1,4 @@
-﻿using System.Linq;
-using UnityEditor;
-using UnityEngine;
+﻿using UnityEditor;
 #if COMPONENT_NAMES
 using Sisus.ComponentNames;
 #endif
@@ -26,55 +24,12 @@ public class GuidComponentDrawer : Editor
         }
     }
 
-    private void UpdateComponentGuids()
-    {
-        GuidManagerEditor.Unregister(_guidComp);
-        for (int i = _guidComp.componentGUIDs.Count - 1; i >= 0; i--)
-        {
-            if (!_guidComp.componentGUIDs[i].cachedComponent)
-            {
-                _guidComp.componentGUIDs.RemoveAt(i);
-            }
-        }
-
-        var components = _guidComp.gameObject.GetComponents<Component>()
-            .Where(component => !GuidComponentExcluders.Excluders.Contains(component.GetType())).ToList();
-
-        if (components.Count == 0)
-        {
-            _guidComp.componentGUIDs.Clear();
-        }
-
-        foreach (Component component in components)
-        {
-            ComponentGuid componentGuid =
-                _guidComp.componentGUIDs.FirstOrDefault(c => c.cachedComponent == component);
-            if (componentGuid == null)
-            {
-                componentGuid = new ComponentGuid { cachedComponent = component };
-                _guidComp.componentGUIDs.Add(componentGuid);
-            }
-
-            // _guidComp.FindOrCreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
-            // componentGuid.SerializedGuid_Editor);
-            // componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
-        }
-
-        GuidManagerEditor.Register(_guidComp);
-    }
-
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
 
         _serializedGuidProp = serializedObject.FindProperty("_guid");
         Initialize();
-
-        if (EditorUtility.IsDirty(_guidComp.gameObject))
-        {
-            // UpdateComponentGuids();
-            EditorUtility.ClearDirty(_guidComp.gameObject);
-        }
 
         if (_guidComp.IsAssetOnDisk())
         {
