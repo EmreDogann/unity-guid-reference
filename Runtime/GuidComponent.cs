@@ -408,7 +408,6 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     private void Awake()
     {
 #if UNITY_EDITOR
-        hideFlags |= HideFlags.NotEditable;
         if (IsAssetOnDisk())
         {
             return;
