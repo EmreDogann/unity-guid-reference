@@ -232,7 +232,6 @@ public class GuidReferenceComponentDrawer : PropertyDrawer
         }
 
         EditorGUI.EndProperty();
-
     }
 
     private void ClearPreviousGuid()
