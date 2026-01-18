@@ -28,11 +28,11 @@ public class GuidComponentDrawer : Editor
 
     private void UpdateComponentGuids()
     {
+        GuidManagerEditor.Unregister(_guidComp);
         for (int i = _guidComp.componentGUIDs.Count - 1; i >= 0; i--)
         {
             if (!_guidComp.componentGUIDs[i].cachedComponent)
             {
-                GuidManager.Remove(_guidComp.componentGUIDs[i].Guid);
                 _guidComp.componentGUIDs.RemoveAt(i);
             }
         }
@@ -55,47 +55,58 @@ public class GuidComponentDrawer : Editor
                 _guidComp.componentGUIDs.Add(componentGuid);
             }
 
-            _guidComp.CreateOrRegisterGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
-                componentGuid.SerializedGuid_Editor);
-            componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
+            // _guidComp.FindOrCreateGuid(ref componentGuid.Guid, ref componentGuid.serializedGuid,
+            // componentGuid.SerializedGuid_Editor);
+            // componentGuid.SerializedGuid_Editor = componentGuid.serializedGuid;
         }
+
+        GuidManagerEditor.Register(_guidComp);
     }
 
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
 
-        _serializedGuidProp = serializedObject.FindProperty("serializedGuid");
+        _serializedGuidProp = serializedObject.FindProperty("_guid");
         Initialize();
 
         if (EditorUtility.IsDirty(_guidComp.gameObject))
         {
-            UpdateComponentGuids();
+            // UpdateComponentGuids();
             EditorUtility.ClearDirty(_guidComp.gameObject);
         }
 
-        // Draw label
-        EditorGUILayout.LabelField("GameObject GUID", _guidComp.GetGuid().ToString());
-
-        if (_guidComp.GetComponentGUIDs().Count > 0)
+        if (_guidComp.IsAssetOnDisk())
         {
-            _serializedGuidProp.isExpanded =
-                EditorGUILayout.Foldout(_serializedGuidProp.isExpanded, "Component GUIDs", true);
-            if (_serializedGuidProp.isExpanded)
-            {
-                EditorGUI.indentLevel++;
-                foreach (ComponentGuid componentGuid in _guidComp.GetComponentGUIDs())
-                {
-                    string label = "";
-#if COMPONENT_NAMES
-                    label = $"{componentGuid.cachedComponent.GetName()}:";
-#else
-                    label = $"{componentGuid.cachedComponent.GetType().Name}:";
-#endif
-                    EditorGUILayout.LabelField(label, componentGuid.Guid.ToString());
-                }
+            EditorGUILayout.HelpBox(
+                "Guid Components do not work in prefab assets.\nHowever, instances of prefabs in a scene will receive the correct guid information.",
+                MessageType.Warning);
+        }
+        else
+        {
+            // Draw label
+            EditorGUILayout.LabelField("GameObject GUID", _guidComp.GetGuid().ToString());
 
-                EditorGUI.indentLevel--;
+            if (_guidComp.GetComponentGUIDs().Count > 0)
+            {
+                _serializedGuidProp.isExpanded =
+                    EditorGUILayout.Foldout(_serializedGuidProp.isExpanded, "Component GUIDs", true);
+                if (_serializedGuidProp.isExpanded)
+                {
+                    EditorGUI.indentLevel++;
+                    foreach (ComponentGuid componentGuid in _guidComp.GetComponentGUIDs())
+                    {
+                        string label = "";
+#if COMPONENT_NAMES
+                        label = $"{componentGuid.cachedComponent.GetName()}:";
+#else
+                        label = $"{componentGuid.cachedComponent.GetType().Name}:";
+#endif
+                        EditorGUILayout.LabelField(label, componentGuid.Guid.ToString());
+                    }
+
+                    EditorGUI.indentLevel--;
+                }
             }
         }
 

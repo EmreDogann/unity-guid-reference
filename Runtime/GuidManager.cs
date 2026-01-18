@@ -159,16 +159,6 @@ public class GuidManager
         return _instance.InternalExistsGuid(guid);
     }
 
-    public static bool OrphanGuid(Guid guid)
-    {
-        if (_instance == null)
-        {
-            _instance = new GuidManager();
-        }
-
-        return _instance.InternalOrphanGuid(guid);
-    }
-
 #if UNITY_EDITOR
     internal static Dictionary<Guid, GuidInfo> GetGuidInfos
     {
@@ -194,16 +184,6 @@ public class GuidManager
     private bool InternalExistsGuid(Guid guid)
     {
         return _guidToObjectMap.ContainsKey(guid);
-    }
-
-    private bool InternalOrphanGuid(Guid guid)
-    {
-        if (_guidToObjectMap.TryGetValue(guid, out GuidInfo info))
-        {
-            info.GuidComponent = null;
-        }
-
-        return false;
     }
 
     private bool InternalAdd(Guid guid, GuidComponent guidComponent)
