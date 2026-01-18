@@ -121,7 +121,7 @@ public class GuidManagerEditor
         {
             bool result =
                 guidRecord.componentGUIDs.TryGetValue(componentKey.ToString(), out SerializableGuid serializableGuid);
-            guid = serializableGuid.Guid;
+            guid = result ? serializableGuid.Guid : Guid.NewGuid();
 
             return result;
         }
