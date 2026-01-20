@@ -14,7 +14,7 @@ using Object = UnityEngine.Object;
 public class GuidComponentDrawer : Editor
 {
     private GuidComponent _guidComp;
-    private InspectorHeader.InspectorItem _inspectorHeader;
+    private InspectorHeader _inspectorHeader;
 
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
@@ -24,10 +24,20 @@ public class GuidComponentDrawer : Editor
     {
         VisualElement root = new VisualElement();
 
+        if (EditorApplication.isCompiling)
+        {
+            return root;
+        }
+
         _serializedGuidProp = serializedObject.FindProperty("_guid");
         _guidComp = (GuidComponent)serializedObject.targetObject;
 
         CreateHeaderGUI(root);
+
+        if (!_guidComp)
+        {
+            return root;
+        }
 
         if (_guidComp.IsAssetOnDisk())
         {
@@ -152,25 +162,23 @@ public class GuidComponentDrawer : Editor
                 return;
             }
 
-            // Inject UI Toolkit header.
-            root.RegisterCallback<AttachToPanelEvent>(_ =>
+            var foundAll = inspectorRoot.Children();
+            foreach (VisualElement element in foundAll)
             {
-                var foundAll = EditorsElement.Children();
-                foreach (VisualElement element in foundAll)
+                if (element.GetType() != EditorElementType)
                 {
-                    if (element.GetType() != EditorElementType)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    Object targetObject = EditorTargetObject.GetValue(element) as Object;
-                    if (targetObject is not GuidComponent)
-                    {
-                        continue;
-                    }
+                Object targetObject = EditorTargetObject.GetValue(element) as Object;
+                if (targetObject is not GuidComponent)
+                {
+                    continue;
+                }
 
-                    Debug.Log("attaching to panel");
-
+                // Inject UI Toolkit header.
+                root.RegisterCallback<AttachToPanelEvent>(_ =>
+                {
                     element.RegisterCallback<DragUpdatedEvent>(evt =>
                     {
                         DragRect((VisualElement)evt.currentTarget, ((VisualElement)evt.currentTarget).layout);
@@ -180,59 +188,45 @@ public class GuidComponentDrawer : Editor
                     InspectorElement inspector = InspectorElement.GetValue(element) as InspectorElement;
                     IMGUIContainer footer = FooterElement.GetValue(element) as IMGUIContainer;
                     _inspectorHeader =
-                        new InspectorHeader.InspectorItem(serializedObject, inspector, footer,
-                            new InspectorHeader.InspectorItem.DrawSettings
+                        new InspectorHeader(serializedObject, inspector, footer,
+                            new InspectorHeader.DrawSettings
                             {
                                 DrawEnableToggle = false,
                                 DrawHelpIcon = false,
                                 DrawPresetIcon = false
                             });
 
-                    element.Insert(0, _inspectorHeader);
-
-                    // Disabling the default IMGUI header. Won't delete it at the risk of some internal Unity logic expecting it to be present and therefore breaking internal contracts.
-                    IMGUIContainer IMGUIHeader = HeaderField.GetValue(element) as IMGUIContainer;
-
-                    _inspectorHeader.name = IMGUIHeader.name;
-                    IMGUIHeader.name = "";
-
-                    IMGUIHeader.visible = false;
-                    IMGUIHeader.style.display = DisplayStyle.None;
-                    IMGUIHeader.onGUIHandler = () => {};
-
-                    root.RegisterCallback<DetachFromPanelEvent>(_ =>
+                    // Do this when visual tree is mostly ready.
+                    _inspectorHeader.RegisterCallback<GeometryChangedEvent>(evt =>
                     {
-                        // root.UnregisterCallback<DragUpdatedEvent>(DragUpdatedCallback);
+                        // Disabling the default IMGUI header. Won't delete it at the risk of some internal Unity logic expecting it to be present and therefore breaking internal contracts.
+                        IMGUIContainer IMGUIHeader = HeaderField.GetValue(element) as IMGUIContainer;
 
-                        if (_inspectorHeader == null)
-                        {
-                            VisualElement inspectorRoot = EditorsElement;
-                            if (inspectorRoot == null)
-                            {
-                                return;
-                            }
+                        _inspectorHeader.name = IMGUIHeader.name;
+                        IMGUIHeader.name = "";
 
-                            var foundAll = inspectorRoot.Children();
-                            foreach (VisualElement element in foundAll) {}
-
-                            for (int i = element.childCount - 1; i >= 0; i--)
-                            {
-                                VisualElement childElement = element[i];
-                                if (childElement.GetType() == typeof(InspectorHeader.InspectorItem))
-                                {
-                                    childElement.RemoveFromHierarchy();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            _inspectorHeader.RemoveFromHierarchy();
-                        }
+                        IMGUIHeader.visible = false;
+                        IMGUIHeader.style.display = DisplayStyle.None;
+                        IMGUIHeader.onGUIHandler = () => {};
                     });
 
-                    break;
-                }
-            });
+                    element.Insert(0, _inspectorHeader);
+                });
+
+                root.RegisterCallback<DetachFromPanelEvent>(evt =>
+                {
+                    // Restore IMGUI settings, otherwise weird stuff happens. Like when reordering components,
+                    // it seems that those components adopt the settings in this UITK header's *now* old spot, therefore having their headers disappear.
+                    IMGUIContainer IMGUIHeader =
+                        HeaderField.GetValue(_inspectorHeader.parent) as IMGUIContainer;
+                    IMGUIHeader.visible = true;
+                    IMGUIHeader.style.display = DisplayStyle.Flex;
+
+                    _inspectorHeader.RemoveFromHierarchy();
+                });
+
+                break;
+            }
         }
     }
 }

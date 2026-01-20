@@ -9,90 +9,6 @@ using UnityEditor.SceneManagement;
 #endif
 
 /// <summary>
-///     Stores GUIDs for a cachedComponent on a GameObject
-/// </summary>
-[Serializable]
-public class ComponentGuid : IEquatable<ComponentGuid>
-{
-    public Component cachedComponent;
-    public SerializableGuid Guid;
-
-    // Store a copy of serializedGuid in a NonSerialized field, so we don't lose the GUID on Reset()
-    // See GuidComponent.serializedGuid_Editor for more details about this.
-#if UNITY_EDITOR
-    [NonSerialized] public byte[] SerializedGuid_Editor;
-#endif
-
-    public ComponentGuid() {}
-
-    public ComponentGuid(Component cachedComponent)
-    {
-        this.cachedComponent = cachedComponent;
-    }
-
-    public ComponentGuid(Component cachedComponent, SerializableGuid guid)
-    {
-        this.cachedComponent = cachedComponent;
-        Guid = guid;
-    }
-
-    public bool IsTypeOrSubclassOf(Type type)
-    {
-        return cachedComponent.GetType() == type || cachedComponent.GetType().IsSubclassOf(type);
-    }
-
-    public bool IsTypeOrSubclassOf<T>() where T : Component
-    {
-        return cachedComponent.GetType() == typeof(T) || cachedComponent.GetType().IsSubclassOf(typeof(T));
-    }
-
-    public bool Equals(ComponentGuid other)
-    {
-        if (ReferenceEquals(null, other))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, null))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-
-        return Guid.Equals(other.Guid);
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (ReferenceEquals(null, obj))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, obj))
-        {
-            return true;
-        }
-
-        if (obj.GetType() != GetType())
-        {
-            return false;
-        }
-
-        return Equals((ComponentGuid)obj);
-    }
-
-    public override int GetHashCode()
-    {
-        return Guid.GetHashCode();
-    }
-}
-
-/// <summary>
 ///     Gives a GameObject and its Components a stable, non-replicatable Globally Unique IDentifier.
 ///     It can be used to reference a specific instance of an object no matter where it is.
 ///     This can also be used for other systems, such as Save/Load game
@@ -607,5 +523,89 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
                 GuidManager.Remove(componentGuid.Guid.Guid);
             }
         }
+    }
+}
+
+/// <summary>
+///     Stores GUIDs for a cachedComponent on a GameObject
+/// </summary>
+[Serializable]
+public class ComponentGuid : IEquatable<ComponentGuid>
+{
+    public Component cachedComponent;
+    public SerializableGuid Guid;
+
+    // Store a copy of serializedGuid in a NonSerialized field, so we don't lose the GUID on Reset()
+    // See GuidComponent.serializedGuid_Editor for more details about this.
+#if UNITY_EDITOR
+    [NonSerialized] public byte[] SerializedGuid_Editor;
+#endif
+
+    public ComponentGuid() {}
+
+    public ComponentGuid(Component cachedComponent)
+    {
+        this.cachedComponent = cachedComponent;
+    }
+
+    public ComponentGuid(Component cachedComponent, SerializableGuid guid)
+    {
+        this.cachedComponent = cachedComponent;
+        Guid = guid;
+    }
+
+    public bool IsTypeOrSubclassOf(Type type)
+    {
+        return cachedComponent.GetType() == type || cachedComponent.GetType().IsSubclassOf(type);
+    }
+
+    public bool IsTypeOrSubclassOf<T>() where T : Component
+    {
+        return cachedComponent.GetType() == typeof(T) || cachedComponent.GetType().IsSubclassOf(typeof(T));
+    }
+
+    public bool Equals(ComponentGuid other)
+    {
+        if (ReferenceEquals(null, other))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, null))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        return Guid.Equals(other.Guid);
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (ReferenceEquals(null, obj))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, obj))
+        {
+            return true;
+        }
+
+        if (obj.GetType() != GetType())
+        {
+            return false;
+        }
+
+        return Equals((ComponentGuid)obj);
+    }
+
+    public override int GetHashCode()
+    {
+        return Guid.GetHashCode();
     }
 }
