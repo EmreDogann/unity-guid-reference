@@ -1,4 +1,3 @@
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -47,37 +46,25 @@ public static class InspectorHeaderStyling
         {
             if (!_inspectorHeaderStyle)
             {
-                _inspectorHeaderStyle = GetAsset<StyleSheet>("InspectorHeader.uss");
+                _inspectorHeaderStyle = GetAsset<StyleSheet>("UIToolkit-InspectorHeader/InspectorHeader.uss");
             }
 
             return _inspectorHeaderStyle;
         }
     }
 
-    // This is the most practical way I found to not depend on specific file paths or GUIDs which change when assets are
-    // duplicated. It makes it easier for the assets to exist multiple times in different places in the same project.
-    private static string FolderPath
-    {
-        get
-        {
-            if (_folderPath == null)
-            {
-                _folderPath = "Packages/com.EmreeDev.UnityGuidReference/Editor";
-            }
-
-            return _folderPath;
-        }
-    }
-
     private static T GetAsset<T>(string relativePath) where T : Object
     {
-        string path = Path.Combine(FolderPath, relativePath);
-
-        if (Path.DirectorySeparatorChar != '/')
+        string[] results =
+            AssetDatabase.FindAssets($"a:packages t:StyleSheet glob:Editor/{relativePath}");
+        if (results.Length == 0)
         {
-            path = path.Replace(Path.DirectorySeparatorChar, '/');
+            Debug.LogError(
+                "Cannot find InspectorHeader.uss! Make sure the package is installed as a package in the \"Packages\" folder!");
+            return null;
         }
 
-        return AssetDatabase.LoadAssetAtPath<T>(path);
+        GUID.TryParse(results[0], out GUID guid);
+        return AssetDatabase.LoadAssetByGUID<T>(guid);
     }
 }
