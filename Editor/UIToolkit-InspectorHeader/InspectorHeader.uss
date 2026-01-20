@@ -18,18 +18,12 @@
     background-color: var(--unity-colors-inspector_titlebar-background);
 }
 
-.uitk-inspector__header:focus {
-    display: none;
-    color: var(--unity-colors-highlight-text);
-    background-color: var(--unity-colors-highlight-background);
-}
-
 .uitk-inspector__header:hover {
     background-color: var(--unity-colors-inspector_titlebar-background-hover);
 }
 
-.uitk-inspector__header:hover {
-    background-color: var(--unity-colors-inspector_titlebar-background);
+.uitk-inspector__header:focus {
+    color: #79a5e6;
 }
 
 .uitk-inspector__header--collapsed,
@@ -73,6 +67,7 @@
     margin: 2px 2px;
 }
 
-.uitk-inspector__header-button:hover {
+.uitk-inspector__header-button:hover,
+.uitk-inspector__header-button:focus {
     background-color: var(--unity-colors-button-background-hover);
 }

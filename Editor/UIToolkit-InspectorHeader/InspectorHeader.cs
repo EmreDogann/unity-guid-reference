@@ -62,12 +62,14 @@ public class InspectorHeader : VisualElement
     private VisualElement CreateHeader(SerializedObject serializedObject, InspectorElement inspector,
         IMGUIContainer footer, DrawSettings drawSettings)
     {
+        focusable = true;
+        delegatesFocus = true;
+
         Object target = serializedObject.targetObject;
         // TODO: HideFlags.NotEditable
         // var header = new Disabler(() => !serializedObject.IsEditable())
-        VisualElement header = new VisualElement();
+        VisualElement header = new VisualElement { focusable = true };
         VisualElement headerContainer = header.contentContainer;
-        headerContainer.focusable = true;
         headerContainer.AddToClassList(InspectorHeaderStyling.InspectorHeaderUssClassName);
 
         bool wasExpanded = InternalEditorUtility.GetIsInspectorExpanded(target);
@@ -85,7 +87,7 @@ public class InspectorHeader : VisualElement
             onClick = () =>
             {
                 foldout.value = !foldout.value;
-                headerContainer.Focus();
+                header.Focus();
             }
         });
 
