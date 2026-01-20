@@ -2,56 +2,19 @@
 using Sisus.ComponentNames;
 #endif
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using Unity.Profiling;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
-
-public class CustomInspectorField : BaseField<string>
-{
-    // Exposed for customization
-    private readonly VisualElement ContentElement;
-
-    public CustomInspectorField(string labelText)
-        : base(labelText, new VisualElement())
-    {
-        ContentElement = this.Q<VisualElement>(className: inputUssClassName);
-        // Ensure horizontal layout for content
-        ContentElement.style.flexDirection = FlexDirection.Row;
-
-        // Match PropertyField spacing exactly
-        AddToClassList(alignedFieldUssClassName);
-
-        // Add extra 1px to bottom margin, due to off-by-1 pixel offset compared to default fields like Object/Property fields.
-        labelElement.style.marginBottom = 1;
-    }
-
-    /// <summary>
-    ///     Replace the label area with custom UI.
-    /// </summary>
-    public void SetCustomLabel(VisualElement customLabel)
-    {
-        labelElement.Clear();
-        labelElement.Add(customLabel);
-    }
-
-    /// <summary>
-    ///     Replace the content area with custom UI.
-    /// </summary>
-    public void SetCustomContent(VisualElement customContent)
-    {
-        ContentElement.Clear();
-        ContentElement.Add(customContent);
-    }
-}
 
 [CustomEditor(typeof(GuidComponent))]
 public class GuidComponentDrawer : Editor
 {
     private GuidComponent _guidComp;
+    private InspectorHeader.InspectorItem _inspectorHeader;
 
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
@@ -63,7 +26,8 @@ public class GuidComponentDrawer : Editor
 
         _serializedGuidProp = serializedObject.FindProperty("_guid");
         _guidComp = (GuidComponent)serializedObject.targetObject;
-        FindHeaderGUI();
+
+        CreateHeaderGUI(root);
 
         if (_guidComp.IsAssetOnDisk())
         {
@@ -74,14 +38,14 @@ public class GuidComponentDrawer : Editor
         }
         else
         {
-            CustomInspectorField inspectorFieldGOGuid = new CustomInspectorField("GameObject GUID");
+            CustomLabelField labelFieldGOGuid = new CustomLabelField("GameObject GUID");
             Label goLabelValue = new Label(_guidComp.GetGuid().ToString())
             {
                 style = { flexGrow = 1 }
             };
-            goLabelValue.AddToClassList(CustomInspectorField.labelUssClassName);
-            inspectorFieldGOGuid.SetCustomContent(goLabelValue);
-            root.Add(inspectorFieldGOGuid);
+            goLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
+            labelFieldGOGuid.SetCustomContent(goLabelValue);
+            root.Add(labelFieldGOGuid);
 
             if (_guidComp.GetComponentGUIDs().Count > 0)
             {
@@ -118,11 +82,11 @@ public class GuidComponentDrawer : Editor
         foreach (ComponentGuid componentGuid in _guidComp.GetComponentGUIDs())
         {
 #if COMPONENT_NAMES
-            CustomInspectorField inspectorFieldComponentGuid =
-                new CustomInspectorField($"{componentGuid.cachedComponent.GetName()}");
+            CustomLabelField labelFieldComponentGuid =
+                new CustomLabelField($"{componentGuid.cachedComponent.GetName()}");
 #else
-            CustomInspectorField inspectorFieldComponentGuid =
-                new CustomInspectorField($"{componentGuid.cachedComponent.GetType().Name}");
+            CustomLabelField labelFieldComponentGuid =
+                new CustomLabelField($"{componentGuid.cachedComponent.GetType().Name}");
 #endif
 
             Label componentLabelValue = new Label(componentGuid.Guid.ToString())
@@ -132,44 +96,55 @@ public class GuidComponentDrawer : Editor
                     flexGrow = 1
                 }
             };
-            componentLabelValue.AddToClassList(CustomInspectorField.labelUssClassName);
-            inspectorFieldComponentGuid.SetCustomContent(componentLabelValue);
+            componentLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
+            labelFieldComponentGuid.SetCustomContent(componentLabelValue);
 
-            parent.Add(inspectorFieldComponentGuid);
+            parent.Add(labelFieldComponentGuid);
         }
     }
 
     // ---- Header GUI ----
-    private static ProfilerMarker _profileMarker =
-        new ProfilerMarker($"{nameof(GuidComponentDrawer)}.{nameof(OnInspectorGUI)}");
-    private static ProfilerMarker _profileMarker2 = new ProfilerMarker($"{nameof(GuidComponentDrawer)}.OnTitlebarGUI");
-    private static readonly Type Type = typeof(EditorWindow).Assembly.GetType("UnityEditor.InspectorWindow");
-    private static readonly Type Type2 = typeof(EditorWindow).Assembly.GetType("UnityEditor.PropertyEditor");
-    private static readonly Type Type3 = typeof(EditorWindow).Assembly.GetType("UnityEditor.UIElements.EditorElement");
-    private static readonly FieldInfo Field =
-        Type2.GetField("m_EditorsElement", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo Field2 =
-        Type3.GetField("m_Header", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo Field3 =
-        Type3.GetField("m_EditorTarget", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static VisualElement m_EditorsElement;
-    private static VisualElement EditorsElement => m_EditorsElement ??= GetEditorVisualElement();
-    private readonly Dictionary<VisualElement, Action> _callbacks = new Dictionary<VisualElement, Action>();
+    private static ProfilerMarker _createInspectorGUIProfileMarker =
+        new ProfilerMarker($"{nameof(GuidComponentDrawer)}.{nameof(CreateInspectorGUI)}");
+    private static readonly Type InspectorWindowType =
+        typeof(EditorWindow).Assembly.GetType("UnityEditor.InspectorWindow");
+    private static readonly Type PropertyEditorType =
+        typeof(EditorWindow).Assembly.GetType("UnityEditor.PropertyEditor");
+    private static readonly Type EditorElementType =
+        typeof(EditorWindow).Assembly.GetType("UnityEditor.UIElements.EditorElement");
+    private static readonly FieldInfo EditorElement =
+        PropertyEditorType.GetField("m_EditorsElement", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo HeaderField =
+        EditorElementType.GetField("m_Header", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo InspectorElement =
+        EditorElementType.GetField("m_InspectorElement", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo FooterElement =
+        EditorElementType.GetField("m_Footer", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo EditorTargetObject =
+        EditorElementType.GetField("m_EditorTarget", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly Action<VisualElement, Rect> DragRect =
+        ReflectionUtility.BuildFieldSetter<VisualElement, Rect>(EditorElementType,
+            "m_DragRect", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly Action<VisualElement, Rect> ContentRect =
+        ReflectionUtility.BuildFieldSetter<VisualElement, Rect>(EditorElementType,
+            "m_ContentRect", BindingFlags.NonPublic | BindingFlags.Instance);
+    private VisualElement m_EditorsElement;
+    private VisualElement EditorsElement => m_EditorsElement ??= GetEditorVisualElement();
 
     private static VisualElement GetEditorVisualElement()
     {
-        EditorWindow window = EditorWindow.GetWindow(Type);
+        EditorWindow window = EditorWindow.GetWindow(InspectorWindowType);
         if (window)
         {
-            return Field.GetValue(window) as VisualElement;
+            return EditorElement.GetValue(window) as VisualElement;
         }
 
         return null;
     }
 
-    private void FindHeaderGUI()
+    private void CreateHeaderGUI(VisualElement root)
     {
-        using (_profileMarker.Auto())
+        using (_createInspectorGUIProfileMarker.Auto())
         {
             VisualElement inspectorRoot = EditorsElement;
             if (inspectorRoot == null)
@@ -177,51 +152,87 @@ public class GuidComponentDrawer : Editor
                 return;
             }
 
-            var foundAll = EditorsElement.Children();
-            foreach (VisualElement element in foundAll)
+            // Inject UI Toolkit header.
+            root.RegisterCallback<AttachToPanelEvent>(_ =>
             {
-                if (element.GetType() != Type3)
+                var foundAll = EditorsElement.Children();
+                foreach (VisualElement element in foundAll)
                 {
-                    continue;
-                }
-
-                Object localTarget = Field3.GetValue(element) as Object;
-                if (localTarget is not GuidComponent)
-                {
-                    continue;
-                }
-
-                IMGUIContainer value2 = Field2.GetValue(element) as IMGUIContainer;
-                Action callback = null;
-                if (_callbacks.TryGetValue(element, out Action found))
-                {
-                    callback = found;
-                }
-                else
-                {
-                    callback = _callbacks[element] = OnHeaderGUICallback;
-                }
-
-                if (value2 != null)
-                {
-                    value2.onGUIHandler = callback;
-                }
-
-                void OnHeaderGUICallback()
-                {
-                    using (_profileMarker2.Auto())
+                    if (element.GetType() != EditorElementType)
                     {
-                        try
-                        {
-                            EditorGUILayout.InspectorTitlebar(true, _guidComp, true);
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogException(e);
-                        }
+                        continue;
                     }
+
+                    Object targetObject = EditorTargetObject.GetValue(element) as Object;
+                    if (targetObject is not GuidComponent)
+                    {
+                        continue;
+                    }
+
+                    Debug.Log("attaching to panel");
+
+                    element.RegisterCallback<DragUpdatedEvent>(evt =>
+                    {
+                        DragRect((VisualElement)evt.currentTarget, ((VisualElement)evt.currentTarget).layout);
+                        ContentRect((VisualElement)evt.currentTarget, ((VisualElement)evt.currentTarget).layout);
+                    });
+
+                    InspectorElement inspector = InspectorElement.GetValue(element) as InspectorElement;
+                    IMGUIContainer footer = FooterElement.GetValue(element) as IMGUIContainer;
+                    _inspectorHeader =
+                        new InspectorHeader.InspectorItem(serializedObject, inspector, footer,
+                            new InspectorHeader.InspectorItem.DrawSettings
+                            {
+                                DrawEnableToggle = false,
+                                DrawHelpIcon = false,
+                                DrawPresetIcon = false
+                            });
+
+                    element.Insert(0, _inspectorHeader);
+
+                    // Disabling the default IMGUI header. Won't delete it at the risk of some internal Unity logic expecting it to be present and therefore breaking internal contracts.
+                    IMGUIContainer IMGUIHeader = HeaderField.GetValue(element) as IMGUIContainer;
+
+                    _inspectorHeader.name = IMGUIHeader.name;
+                    IMGUIHeader.name = "";
+
+                    IMGUIHeader.visible = false;
+                    IMGUIHeader.style.display = DisplayStyle.None;
+                    IMGUIHeader.onGUIHandler = () => {};
+
+                    root.RegisterCallback<DetachFromPanelEvent>(_ =>
+                    {
+                        // root.UnregisterCallback<DragUpdatedEvent>(DragUpdatedCallback);
+
+                        if (_inspectorHeader == null)
+                        {
+                            VisualElement inspectorRoot = EditorsElement;
+                            if (inspectorRoot == null)
+                            {
+                                return;
+                            }
+
+                            var foundAll = inspectorRoot.Children();
+                            foreach (VisualElement element in foundAll) {}
+
+                            for (int i = element.childCount - 1; i >= 0; i--)
+                            {
+                                VisualElement childElement = element[i];
+                                if (childElement.GetType() == typeof(InspectorHeader.InspectorItem))
+                                {
+                                    childElement.RemoveFromHierarchy();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            _inspectorHeader.RemoveFromHierarchy();
+                        }
+                    });
+
+                    break;
                 }
-            }
+            });
         }
     }
 }
