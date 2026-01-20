@@ -274,7 +274,6 @@ public class InspectorHeader : VisualElement
         // }
 
         GenericMenu menu = new GenericMenu();
-        menu.AddItem(new GUIContent("Hello World"), false, () => Debug.Log("Hello, World!"));
         // TODO: Editable Label?
         // Object target = serializedObject.targetObject;
 
