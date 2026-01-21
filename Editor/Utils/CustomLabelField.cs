@@ -8,12 +8,16 @@ public class CustomLabelField : BaseField<string>
     public CustomLabelField(string labelText)
         : base(labelText, new VisualElement())
     {
+        focusable = true;
+        delegatesFocus = true;
         ContentElement = this.Q<VisualElement>(className: inputUssClassName);
         // Ensure horizontal layout for content
         ContentElement.style.flexDirection = FlexDirection.Row;
 
         // Match PropertyField spacing exactly
         AddToClassList(alignedFieldUssClassName);
+
+        StyleSheetUtility.ApplyCurrentTheme(this);
 
         // Add extra 1px to bottom margin, due to off-by-1 pixel offset compared to default fields like Object/Property fields.
         labelElement.style.marginBottom = 1;

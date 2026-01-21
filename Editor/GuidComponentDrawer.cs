@@ -48,12 +48,16 @@ public class GuidComponentDrawer : Editor
         }
         else
         {
+            root.styleSheets.Add(StyleSheetUtility.GuidComponentStyle);
+
             CustomLabelField labelFieldGOGuid = new CustomLabelField("GameObject GUID");
             Label goLabelValue = new Label(_guidComp.GetGuid().ToString())
             {
                 style = { flexGrow = 1 }
             };
             goLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
+            goLabelValue.AddToClassList(StyleSheetUtility.GuidComponentValueUssClassName);
+
             labelFieldGOGuid.SetCustomContent(goLabelValue);
 
             labelFieldGOGuid.RegisterCallback<ContextClickEvent>(e =>
@@ -123,6 +127,7 @@ public class GuidComponentDrawer : Editor
                 }
             };
             componentLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
+            componentLabelValue.AddToClassList(StyleSheetUtility.GuidComponentValueUssClassName);
             labelFieldComponentGuid.SetCustomContent(componentLabelValue);
 
             labelFieldComponentGuid.RegisterCallback<ContextClickEvent>(e =>
