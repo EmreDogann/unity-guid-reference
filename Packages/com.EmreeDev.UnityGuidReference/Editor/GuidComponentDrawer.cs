@@ -55,6 +55,22 @@ public class GuidComponentDrawer : Editor
             };
             goLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
             labelFieldGOGuid.SetCustomContent(goLabelValue);
+
+            labelFieldGOGuid.RegisterCallback<ContextClickEvent>(e =>
+            {
+                GenericMenu menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Copy GUID to Clipboard"), false, () =>
+                {
+                    TextEditor textEditor = new TextEditor
+                    {
+                        text = _guidComp._guid.ToString()
+                    };
+                    textEditor.SelectAll();
+                    textEditor.Copy();
+                });
+                menu.ShowAsContext();
+            });
+
             root.Add(labelFieldGOGuid);
 
             if (_guidComp.GetComponentGUIDs().Count > 0)
@@ -108,6 +124,21 @@ public class GuidComponentDrawer : Editor
             };
             componentLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
             labelFieldComponentGuid.SetCustomContent(componentLabelValue);
+
+            labelFieldComponentGuid.RegisterCallback<ContextClickEvent>(e =>
+            {
+                GenericMenu menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Copy GUID to Clipboard"), false, () =>
+                {
+                    TextEditor textEditor = new TextEditor
+                    {
+                        text = componentGuid.Guid.ToString()
+                    };
+                    textEditor.SelectAll();
+                    textEditor.Copy();
+                });
+                menu.ShowAsContext();
+            });
 
             parent.Add(labelFieldComponentGuid);
         }
