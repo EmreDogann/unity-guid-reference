@@ -1,0 +1,4 @@
+/*https://www.foundations.unity.com/fundamentals/color-palette#:~:text=Label%20Text%20Focus*/
+.uitk-inspector-variables {
+    --uitk-inspector-colors-text-highlight: #81B4FF
+}

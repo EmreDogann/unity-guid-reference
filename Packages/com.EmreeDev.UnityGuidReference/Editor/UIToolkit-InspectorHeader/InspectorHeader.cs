@@ -66,6 +66,8 @@ public class InspectorHeader : VisualElement
         focusable = true;
         delegatesFocus = true;
 
+        InspectorHeaderStyling.ApplyCurrentTheme(this);
+
         Object target = serializedObject.targetObject;
         // TODO: HideFlags.NotEditable
         // var header = new Disabler(() => !serializedObject.IsEditable())
