@@ -50,38 +50,31 @@ public class GuidComponentDrawer : Editor
         {
             root.styleSheets.Add(StyleSheetUtility.GuidComponentStyle);
 
-            CustomLabelField labelFieldGOGuid = new CustomLabelField("GameObject GUID");
-            Label goLabelValue = new Label(_guidComp.GetGuid().ToString())
+            TextField textField = new TextField("Game Object")
             {
-                style = { flexGrow = 1 }
+                isReadOnly = true
             };
-            goLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
-            goLabelValue.AddToClassList(StyleSheetUtility.GuidComponentValueUssClassName);
+            textField.AddToClassList(TextField.alignedFieldUssClassName);
+            textField.AddToClassList(".guid-component__guid-text-field");
+            textField.value = _guidComp._guid.ToString();
 
-            labelFieldGOGuid.SetCustomContent(goLabelValue);
-
-            labelFieldGOGuid.RegisterCallback<ContextClickEvent>(e =>
+            VisualElement element = new VisualElement
             {
-                GenericMenu menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Copy GUID to Clipboard"), false, () =>
-                {
-                    TextEditor textEditor = new TextEditor
-                    {
-                        text = _guidComp._guid.ToString()
-                    };
-                    textEditor.SelectAll();
-                    textEditor.Copy();
-                });
-                menu.ShowAsContext();
-            });
+                style = { flexDirection = FlexDirection.Row }
+            };
 
-            root.Add(labelFieldGOGuid);
+            Image icon = new Image { image = EditorGUIUtility.ObjectContent(null, typeof(GameObject)).image };
+            icon.name = "guid-component-icon";
+            element.Add(icon);
+            element.Add(textField);
+
+            root.Add(element);
 
             if (_guidComp.GetComponentGUIDs().Count > 0)
             {
                 Foldout foldout = new Foldout
                 {
-                    text = "Component GUIDs",
+                    text = "Components",
                     value = _serializedGuidProp.isExpanded,
                     toggleOnLabelClick = true,
                     style = { unityFontStyleAndWeight = FontStyle.Bold }
@@ -111,41 +104,27 @@ public class GuidComponentDrawer : Editor
     {
         foreach (ComponentGuid componentGuid in _guidComp.GetComponentGUIDs())
         {
+            VisualElement element = new VisualElement
+            {
+                style = { flexDirection = FlexDirection.Row }
+            };
 #if COMPONENT_NAMES
-            CustomLabelField labelFieldComponentGuid =
-                new CustomLabelField($"{componentGuid.cachedComponent.GetName()}");
+            TextField labelFieldComponentGuid = new TextField($"{componentGuid.cachedComponent.GetName()}");
 #else
-            CustomLabelField labelFieldComponentGuid =
-                new CustomLabelField($"{componentGuid.cachedComponent.GetType().Name}");
+            TextField labelFieldComponentGuid =
+                new TextField($"{ObjectNames.NicifyVariableName(componentGuid.cachedComponent.GetType().Name)}");
 #endif
 
-            Label componentLabelValue = new Label(componentGuid.Guid.ToString())
-            {
-                style =
-                {
-                    flexGrow = 1
-                }
-            };
-            componentLabelValue.AddToClassList(CustomLabelField.labelUssClassName);
-            componentLabelValue.AddToClassList(StyleSheetUtility.GuidComponentValueUssClassName);
-            labelFieldComponentGuid.SetCustomContent(componentLabelValue);
+            labelFieldComponentGuid.isReadOnly = true;
+            labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
+            labelFieldComponentGuid.value = componentGuid.Guid.ToString();
+            Image icon = new Image
+                { image = EditorGUIUtility.ObjectContent(null, componentGuid.cachedComponent.GetType()).image };
+            icon.name = "guid-component-icon";
+            element.Add(icon);
+            element.Add(labelFieldComponentGuid);
 
-            labelFieldComponentGuid.RegisterCallback<ContextClickEvent>(e =>
-            {
-                GenericMenu menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Copy GUID to Clipboard"), false, () =>
-                {
-                    TextEditor textEditor = new TextEditor
-                    {
-                        text = componentGuid.Guid.ToString()
-                    };
-                    textEditor.SelectAll();
-                    textEditor.Copy();
-                });
-                menu.ShowAsContext();
-            });
-
-            parent.Add(labelFieldComponentGuid);
+            parent.Add(element);
         }
     }
 
