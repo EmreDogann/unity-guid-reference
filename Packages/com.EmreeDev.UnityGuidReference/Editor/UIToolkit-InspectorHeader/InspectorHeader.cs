@@ -19,6 +19,7 @@ public class InspectorHeader : VisualElement
         public bool DrawPresetIcon = true;
         public bool DrawSettingsIcon = true;
         public bool EnableContextMenu = true;
+        public string HeaderTitleOverride = "";
     }
 
     private readonly SerializedObject _backingObject;
@@ -185,7 +186,9 @@ public class InspectorHeader : VisualElement
         if (drawSettings.DrawLabel)
         {
             Label label = new Label { pickingMode = PickingMode.Ignore, focusable = true };
-            label.text = ObjectNames.NicifyVariableName(serializedObject.targetObject.GetType().Name);
+            label.text = string.IsNullOrEmpty(drawSettings.HeaderTitleOverride)
+                ? ObjectNames.NicifyVariableName(serializedObject.targetObject.GetType().Name)
+                : drawSettings.HeaderTitleOverride;
             label.AddToClassList(InspectorHeaderStyling.InspectorHeaderLabelUssClassName);
             header.Add(label);
         }
