@@ -116,40 +116,48 @@ public class GuidComponentDrawer : Editor
     // ---- Header GUI ----
     private static ProfilerMarker _createInspectorGUIProfileMarker =
         new ProfilerMarker($"{nameof(GuidComponentDrawer)}.{nameof(CreateInspectorGUI)}");
+
     private static readonly Type InspectorWindowType =
         typeof(EditorWindow).Assembly.GetType("UnityEditor.InspectorWindow");
-    private static readonly Type PropertyEditorType =
-        typeof(EditorWindow).Assembly.GetType("UnityEditor.PropertyEditor");
+    // We can also check for this if we want to render this UITK Header in the "Properties" inspector editor.
+    // private static readonly Type PropertyEditorType =
+    //     typeof(EditorWindow).Assembly.GetType("UnityEditor.PropertyEditor");
     private static readonly Type EditorElementType =
         typeof(EditorWindow).Assembly.GetType("UnityEditor.UIElements.EditorElement");
-    private static readonly FieldInfo EditorElement =
-        PropertyEditorType.GetField("m_EditorsElement", BindingFlags.NonPublic | BindingFlags.Instance);
+
+    private static readonly FieldInfo PropertyViewerField =
+        typeof(Editor).GetField("m_PropertyViewer", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo EditorElementField =
+        InspectorWindowType.GetField("m_EditorsElement", BindingFlags.NonPublic | BindingFlags.Instance);
     private static readonly FieldInfo HeaderField =
         EditorElementType.GetField("m_Header", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo InspectorElement =
+    private static readonly FieldInfo InspectorElementField =
         EditorElementType.GetField("m_InspectorElement", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo FooterElement =
+    private static readonly FieldInfo FooterElementField =
         EditorElementType.GetField("m_Footer", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo EditorTargetObject =
+    private static readonly FieldInfo EditorTargetObjectField =
         EditorElementType.GetField("m_EditorTarget", BindingFlags.NonPublic | BindingFlags.Instance);
+
     private static readonly Action<VisualElement, Rect> DragRect =
         ReflectionUtility.BuildFieldSetter<VisualElement, Rect>(EditorElementType,
             "m_DragRect", BindingFlags.NonPublic | BindingFlags.Instance);
     private static readonly Action<VisualElement, Rect> ContentRect =
         ReflectionUtility.BuildFieldSetter<VisualElement, Rect>(EditorElementType,
             "m_ContentRect", BindingFlags.NonPublic | BindingFlags.Instance);
+
     private VisualElement m_EditorsElement;
     private VisualElement EditorsElement => m_EditorsElement ??= GetEditorVisualElement();
 
-    private static VisualElement GetEditorVisualElement()
+    private VisualElement GetEditorVisualElement()
     {
-        EditorWindow window = EditorWindow.GetWindow(InspectorWindowType);
-        if (window)
+        object propertyViewer = PropertyViewerField.GetValue(this);
+        if (propertyViewer == null || propertyViewer.GetType() != InspectorWindowType)
         {
-            return EditorElement.GetValue(window) as VisualElement;
+            return null;
         }
 
-        return null;
+        VisualElement editorsElement = EditorElementField.GetValue(propertyViewer) as VisualElement;
+        return editorsElement;
     }
 
     private void CreateHeaderGUI(VisualElement root)
@@ -170,7 +178,7 @@ public class GuidComponentDrawer : Editor
                     continue;
                 }
 
-                Object targetObject = EditorTargetObject.GetValue(element) as Object;
+                Object targetObject = EditorTargetObjectField.GetValue(element) as Object;
                 if (targetObject is not GuidComponent)
                 {
                     continue;
@@ -185,8 +193,8 @@ public class GuidComponentDrawer : Editor
                         ContentRect((VisualElement)evt.currentTarget, ((VisualElement)evt.currentTarget).layout);
                     });
 
-                    InspectorElement inspector = InspectorElement.GetValue(element) as InspectorElement;
-                    IMGUIContainer footer = FooterElement.GetValue(element) as IMGUIContainer;
+                    InspectorElement inspector = InspectorElementField.GetValue(element) as InspectorElement;
+                    IMGUIContainer footer = FooterElementField.GetValue(element) as IMGUIContainer;
                     _inspectorHeader =
                         new InspectorHeader(serializedObject, inspector, footer,
                             new InspectorHeader.DrawSettings
