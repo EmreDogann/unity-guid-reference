@@ -24,9 +24,13 @@ public static class InspectorHeaderStyling
     /// <summary> USS class name of the inspector header enable toggle (Mono Behaviours only). </summary>
     public const string InspectorHeaderEnableToggleUssClassName = "uitk-inspector__header-enable-toggle";
 
-    private static string _folderPath;
-    private static StyleSheet _editableLabelStyle;
+    /// <summary> USS applied by <see cref="ApplyCurrentTheme(VisualElement)" /> to add style variables. </summary>
+    private const string VariablesContainerUssClassName = "uitk-inspector-variables";
+
     private static StyleSheet _inspectorHeaderStyle;
+    private static StyleSheet _darkTheme;
+    private static StyleSheet _lightTheme;
+    // private static StyleSheet _editableLabelStyle;
 
     /// <summary> StyleSheet for <see cref="EditableLabel"/> </summary>
     // public static StyleSheet editableLabelStyle
@@ -46,17 +50,56 @@ public static class InspectorHeaderStyling
         {
             if (!_inspectorHeaderStyle)
             {
-                _inspectorHeaderStyle = GetAsset<StyleSheet>("UIToolkit-InspectorHeader/InspectorHeader.uss");
+                _inspectorHeaderStyle = GetAsset<StyleSheet>("InspectorHeader.uss");
             }
 
             return _inspectorHeaderStyle;
         }
     }
 
+    private static StyleSheet DarkTheme
+    {
+        get
+        {
+            if (!_darkTheme)
+            {
+                _darkTheme = GetAsset<StyleSheet>("InspectorHeaderVariables-Dark.uss");
+            }
+
+            return _darkTheme;
+        }
+    }
+
+    private static StyleSheet LightTheme
+    {
+        get
+        {
+            if (!_lightTheme)
+            {
+                _lightTheme = GetAsset<StyleSheet>("InspectorHeaderVariables-Light.uss");
+            }
+
+            return _lightTheme;
+        }
+    }
+
+    /// <summary>
+    ///     Pass a custom root element to this method to use the appropiate USS variables and class names for Unity's current skin.
+    /// </summary>
+    /// <param name="rootElement">The custom root element that will contain the variables. </param>
+    public static void ApplyCurrentTheme(VisualElement rootElement)
+    {
+        bool isDark = EditorGUIUtility.isProSkin;
+
+        StyleSheet style = isDark ? DarkTheme : LightTheme;
+        rootElement.styleSheets.Add(style);
+        rootElement.AddToClassList(VariablesContainerUssClassName);
+    }
+
     private static T GetAsset<T>(string relativePath) where T : Object
     {
         string[] results =
-            AssetDatabase.FindAssets($"a:packages t:StyleSheet glob:Editor/{relativePath}");
+            AssetDatabase.FindAssets($"a:packages t:StyleSheet glob:Editor/UIToolkit-InspectorHeader/{relativePath}");
         if (results.Length == 0)
         {
             Debug.LogError(

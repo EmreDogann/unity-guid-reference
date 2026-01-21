@@ -23,7 +23,7 @@
 }
 
 .uitk-inspector__header:focus {
-    color: #79a5e6;
+    color: var(--uitk-inspector-colors-text-highlight);
 }
 
 .uitk-inspector__header--collapsed,
