@@ -1,3 +1,26 @@
 CustomLabelField:focus > * > .guid-component__guid-value {
-    color: var(--uitk-inspector-colors-text-highlight);
+    color: var(--unity-colors-label-text-focus);
+}
+
+TextField:focus:enabled > #unity-text-input {
+    color: var(--unity-colors-label-text-focus);
+}
+
+TextField > #unity-text-input {
+    border-width: 0;
+    margin: 1 0;
+    padding-left: 0;
+    padding-right: 0;
+    background-color: transparent;
+}
+
+TextField > #unity-text-input:hover {
+    color: var(--unity-colors-button-text);
+}
+
+#guid-component-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    align-self: center;
 }
