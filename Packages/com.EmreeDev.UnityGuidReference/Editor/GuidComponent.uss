@@ -1,0 +1,3 @@
+CustomLabelField:focus > * > .guid-component__guid-value {
+    color: var(--uitk-inspector-colors-text-highlight);
+}

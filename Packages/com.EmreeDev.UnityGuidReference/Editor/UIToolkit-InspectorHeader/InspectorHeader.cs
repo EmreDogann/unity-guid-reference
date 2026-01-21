@@ -42,8 +42,8 @@ public class InspectorHeader : VisualElement
                     typeof(Action<GenericMenu, Rect, Object[], int>), contextMenuMethod, false);
         }
 
-        styleSheets.Add(InspectorHeaderStyling.InspectorHeaderStyle);
-        AddToClassList(InspectorHeaderStyling.InspectorUssClassName);
+        styleSheets.Add(StyleSheetUtility.InspectorHeaderStyle);
+        AddToClassList(StyleSheetUtility.InspectorUssClassName);
 
         _backingObject = serializedObject;
         _inspectorElement = inspectorElement;
@@ -66,14 +66,14 @@ public class InspectorHeader : VisualElement
         focusable = true;
         delegatesFocus = true;
 
-        InspectorHeaderStyling.ApplyCurrentTheme(this);
+        StyleSheetUtility.ApplyCurrentTheme(this);
 
         Object target = serializedObject.targetObject;
         // TODO: HideFlags.NotEditable
         // var header = new Disabler(() => !serializedObject.IsEditable())
         VisualElement header = new VisualElement { focusable = true };
         VisualElement headerContainer = header.contentContainer;
-        headerContainer.AddToClassList(InspectorHeaderStyling.InspectorHeaderUssClassName);
+        headerContainer.AddToClassList(StyleSheetUtility.InspectorHeaderUssClassName);
 
         bool wasExpanded = InternalEditorUtility.GetIsInspectorExpanded(target);
         SetItemExpanded(wasExpanded, headerContainer, footer, target, inspector);
@@ -114,7 +114,7 @@ public class InspectorHeader : VisualElement
         InspectorElement inspector)
     {
         inspector.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
-        header.EnableInClassList(InspectorHeaderStyling.InspectorHeaderCollapsedUssClassName, !expanded);
+        header.EnableInClassList(StyleSheetUtility.InspectorHeaderCollapsedUssClassName, !expanded);
         if (expanded)
         {
             footer.style.marginTop = 0;
@@ -131,7 +131,7 @@ public class InspectorHeader : VisualElement
     {
         Foldout foldout = new Foldout { pickingMode = PickingMode.Ignore, value = expanded };
         foldout.Query().Descendents<VisualElement>().ForEach(el => el.pickingMode = PickingMode.Ignore);
-        foldout.AddToClassList(InspectorHeaderStyling.InspectorHeaderFoldoutUssClassName);
+        foldout.AddToClassList(StyleSheetUtility.InspectorHeaderFoldoutUssClassName);
         header.Add(foldout);
         return foldout;
     }
@@ -147,12 +147,12 @@ public class InspectorHeader : VisualElement
         if (drawSettings.DrawIcon)
         {
             Image icon = new Image { image = AssetPreview.GetMiniThumbnail(serializedObject.targetObject) };
-            icon.AddToClassList(InspectorHeaderStyling.InspectorHeaderIconUssClassName);
+            icon.AddToClassList(StyleSheetUtility.InspectorHeaderIconUssClassName);
             header.Add(icon);
         }
 
         Toggle toggle = new Toggle();
-        toggle.AddToClassList(InspectorHeaderStyling.InspectorHeaderEnableToggleUssClassName);
+        toggle.AddToClassList(StyleSheetUtility.InspectorHeaderEnableToggleUssClassName);
         toggle.BindProperty(serializedObject.FindProperty("m_Enabled"));
         if (!drawSettings.DrawEnableToggle || serializedObject.targetObject is not MonoBehaviour)
         {
@@ -173,7 +173,7 @@ public class InspectorHeader : VisualElement
     {
         // TODO: Renaming Component Name?
         // var label = new EditableLabel { bindingPath = "m_Name", isDelayed = true };
-        // label.AddToClassList(InspectorHeaderStyling.InspectorHeaderLabelUssClassName);
+        // label.AddToClassList(StyleSheetUtility.InspectorHeaderLabelUssClassName);
         // label.editOnDoubleClick = false;
         // label.emptyTextLabel = ObjectNames.NicifyVariableName(serializedObject.targetObject.GetType().Name);
         // header.Add(label);
@@ -191,7 +191,7 @@ public class InspectorHeader : VisualElement
             label.text = string.IsNullOrEmpty(drawSettings.HeaderTitleOverride)
                 ? ObjectNames.NicifyVariableName(serializedObject.targetObject.GetType().Name)
                 : drawSettings.HeaderTitleOverride;
-            label.AddToClassList(InspectorHeaderStyling.InspectorHeaderLabelUssClassName);
+            label.AddToClassList(StyleSheetUtility.InspectorHeaderLabelUssClassName);
             header.Add(label);
         }
     }
@@ -214,7 +214,7 @@ public class InspectorHeader : VisualElement
             bool hasTooltip = Attribute.IsDefined(targetType, typeof(TooltipAttribute));
 
             Button help = new Button();
-            help.AddToClassList(InspectorHeaderStyling.InspectorHeaderButtonUssClassName);
+            help.AddToClassList(StyleSheetUtility.InspectorHeaderButtonUssClassName);
             help.style.backgroundImage = EditorGUIUtility.IconContent("_Help").image as Texture2D;
             help.SetEnabled(hasHelp || hasTooltip);
             help.visible = hasHelp || hasTooltip;
@@ -238,7 +238,7 @@ public class InspectorHeader : VisualElement
             (target.hideFlags & HideFlags.NotEditable) == 0)
         {
             Button presets = new Button();
-            presets.AddToClassList(InspectorHeaderStyling.InspectorHeaderButtonUssClassName);
+            presets.AddToClassList(StyleSheetUtility.InspectorHeaderButtonUssClassName);
             presets.style.backgroundImage = EditorGUIUtility.IconContent("Preset.Context").image as Texture2D;
             presets.clicked += () => ShowPresetSelector(serializedObject);
             header.Add(presets);
@@ -247,7 +247,7 @@ public class InspectorHeader : VisualElement
         if (drawSettings.DrawSettingsIcon)
         {
             Button settings = new Button();
-            settings.AddToClassList(InspectorHeaderStyling.InspectorHeaderButtonUssClassName);
+            settings.AddToClassList(StyleSheetUtility.InspectorHeaderButtonUssClassName);
             settings.style.backgroundImage = EditorGUIUtility.IconContent("_Menu").image as Texture2D;
             settings.clicked += () =>
                 ShowInspectorContextMenu(settings.worldBound, header, serializedObject, drawSettings);
@@ -282,7 +282,7 @@ public class InspectorHeader : VisualElement
         // TODO: Editable Label?
         // Object target = serializedObject.targetObject;
 
-//         var editableLabel = header?.Q<EditableLabel>(null, InspectorHeaderStyling.InspectorHeaderLabelUssClassName);
+//         var editableLabel = header?.Q<EditableLabel>(null, StyleSheetUtility.InspectorHeaderLabelUssClassName);
 //         if (editableLabel != null
 //             && editableLabel.style.display != DisplayStyle.None
 //             && editableLabel.style.visibility != Visibility.Hidden)
@@ -338,7 +338,7 @@ public class InspectorHeader : VisualElement
     private void AssignControlsForInvalidScript()
     {
         VisualElement header = new VisualElement { style = { height = 22 } };
-        header.AddToClassList(InspectorHeaderStyling.InspectorHeaderUssClassName);
+        header.AddToClassList(StyleSheetUtility.InspectorHeaderUssClassName);
         VisualElement body = new VisualElement();
         body.style.paddingTop = 3;
         body.style.paddingBottom = 3;
@@ -348,16 +348,16 @@ public class InspectorHeader : VisualElement
         Foldout foldout = AddHeaderFoldout(header, true);
         foldout.RegisterValueChangedCallback(e =>
         {
-            header.EnableInClassList(InspectorHeaderStyling.InspectorHeaderCollapsedUssClassName, !e.newValue);
+            header.EnableInClassList(StyleSheetUtility.InspectorHeaderCollapsedUssClassName, !e.newValue);
             body.style.display = e.newValue ? DisplayStyle.Flex : DisplayStyle.None;
         });
 
         Image icon = new Image { image = EditorGUIUtility.IconContent("Warning").image };
-        icon.AddToClassList(InspectorHeaderStyling.InspectorHeaderIconUssClassName);
+        icon.AddToClassList(StyleSheetUtility.InspectorHeaderIconUssClassName);
         header.Add(icon);
 
         Label label = new Label("Object With Invalid Script");
-        label.AddToClassList(InspectorHeaderStyling.InspectorHeaderLabelUssClassName);
+        label.AddToClassList(StyleSheetUtility.InspectorHeaderLabelUssClassName);
         header.Add(label);
 
         header.AddManipulator(new DragAndClickManipulator
