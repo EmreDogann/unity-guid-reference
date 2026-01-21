@@ -193,7 +193,8 @@ public class GuidComponentDrawer : Editor
                             {
                                 DrawEnableToggle = false,
                                 DrawHelpIcon = false,
-                                DrawPresetIcon = false
+                                DrawPresetIcon = false,
+                                HeaderTitleOverride = "Guid"
                             });
 
                     // Do this when visual tree is mostly ready.
