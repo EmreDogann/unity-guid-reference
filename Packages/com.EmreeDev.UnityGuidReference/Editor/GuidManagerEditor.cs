@@ -173,6 +173,7 @@ public class GuidManagerEditor
         GuidComponent.OnComponentGuidRequested -= TryRestoreOrCreateComponent;
         GuidComponent.OnComponentGuidRequested += TryRestoreOrCreateComponent;
 
+        ObjectChangeEvents.changesPublished -= ChangesPublished;
         ObjectChangeEvents.changesPublished += ChangesPublished;
         // ObjectFactory.componentWasAdded += OnComponentAdded;
     }
@@ -286,8 +287,18 @@ public class GuidManagerEditor
                     Debug.Log(s);
                     break;
                 case ObjectChangeKind.ChangeChildrenOrder:
+                    stream.GetChangeChildrenOrderEvent(i,
+                        out ChangeChildrenOrderEventArgs changeChildrenOrderEventArgs);
+                    Object changeChildren = EditorUtility.EntityIdToObject(changeChildrenOrderEventArgs.instanceId);
+                    Debug.Log(
+                        $"{type}: {changeChildren} in scene {changeChildrenOrderEventArgs.scene}.");
                     break;
                 case ObjectChangeKind.ChangeRootOrder:
+                    stream.GetChangeRootOrderEvent(i,
+                        out ChangeRootOrderEventArgs changeRootOrderEventArgs);
+                    Object changeRoot = EditorUtility.EntityIdToObject(changeRootOrderEventArgs.instanceId);
+                    Debug.Log(
+                        $"{type}: {changeRoot} in scene {changeRootOrderEventArgs.scene}.");
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();

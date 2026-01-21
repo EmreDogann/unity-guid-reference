@@ -391,7 +391,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         }
     }
 
-    private void OnValidate()
+    internal void OnValidate()
     {
         if (IsAssetOnDisk())
         {
@@ -419,6 +419,9 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             FindOrCreateComponentGuid(componentGuid);
             componentGuid.SerializedGuid_Editor = componentGuid.Guid.Guid.ToByteArray();
         }
+
+        componentGUIDs.RemoveAll(guid => !guid.cachedComponent);
+        componentGUIDs = componentGUIDs.OrderBy(guid => guid.cachedComponent.GetComponentIndex()).ToList();
     }
 #endif
 
@@ -535,9 +538,9 @@ public class ComponentGuid : IEquatable<ComponentGuid>
     public Component cachedComponent;
     public SerializableGuid Guid;
 
+#if UNITY_EDITOR
     // Store a copy of serializedGuid in a NonSerialized field, so we don't lose the GUID on Reset()
     // See GuidComponent.serializedGuid_Editor for more details about this.
-#if UNITY_EDITOR
     [NonSerialized] public byte[] SerializedGuid_Editor;
 #endif
 

@@ -15,6 +15,7 @@ public class GuidComponentDrawer : Editor
 {
     private GuidComponent _guidComp;
     private InspectorHeader _inspectorHeader;
+    private VisualElement _componentGUIDsContainer;
 
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
@@ -28,6 +29,10 @@ public class GuidComponentDrawer : Editor
         {
             return root;
         }
+
+        root.RegisterCallback<AttachToPanelEvent>(_ => ObjectChangeEvents.changesPublished += ChangesPublished);
+
+        root.RegisterCallback<DetachFromPanelEvent>(_ => ObjectChangeEvents.changesPublished -= ChangesPublished);
 
         _serializedGuidProp = serializedObject.FindProperty("_guid");
         _guidComp = (GuidComponent)serializedObject.targetObject;
@@ -50,18 +55,18 @@ public class GuidComponentDrawer : Editor
         {
             root.styleSheets.Add(StyleSheetUtility.GuidComponentStyle);
 
+            VisualElement element = new VisualElement
+            {
+                style = { flexDirection = FlexDirection.Row }
+            };
+
             TextField textField = new TextField("Game Object")
             {
                 isReadOnly = true
             };
             textField.AddToClassList(TextField.alignedFieldUssClassName);
             textField.AddToClassList(".guid-component__guid-text-field");
-            textField.value = _guidComp._guid.ToString();
-
-            VisualElement element = new VisualElement
-            {
-                style = { flexDirection = FlexDirection.Row }
-            };
+            textField.SetValueWithoutNotify(_guidComp._guid.ToString());
 
             Image icon = new Image { image = EditorGUIUtility.ObjectContent(null, typeof(GameObject)).image };
             icon.name = "guid-component-icon";
@@ -82,6 +87,8 @@ public class GuidComponentDrawer : Editor
                 foldout.contentContainer.style.unityFontStyleAndWeight = FontStyle.Normal;
                 root.Add(foldout);
 
+                _componentGUIDsContainer = foldout.contentContainer;
+
                 // Populate rows
                 RebuildGuidList(foldout.contentContainer);
 
@@ -98,6 +105,30 @@ public class GuidComponentDrawer : Editor
         }
 
         return root;
+    }
+
+    private void ChangesPublished(ref ObjectChangeEventStream stream)
+    {
+        Debug.Log("ChangesPublished");
+        bool needsComponentListRebuilding = false;
+        for (int i = 0; i < stream.length; ++i)
+        {
+            ObjectChangeKind type = stream.GetEventType(i);
+            switch (type)
+            {
+                case ObjectChangeKind.ChangeGameObjectStructureHierarchy:
+                case ObjectChangeKind.ChangeGameObjectStructure:
+                    needsComponentListRebuilding = true;
+                    break;
+            }
+        }
+
+        if (needsComponentListRebuilding)
+        {
+            _componentGUIDsContainer.Clear();
+            _guidComp.OnValidate();
+            RebuildGuidList(_componentGUIDsContainer);
+        }
     }
 
     private void RebuildGuidList(VisualElement parent)
@@ -118,6 +149,7 @@ public class GuidComponentDrawer : Editor
             labelFieldComponentGuid.isReadOnly = true;
             labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
             labelFieldComponentGuid.value = componentGuid.Guid.ToString();
+
             Image icon = new Image
                 { image = EditorGUIUtility.ObjectContent(null, componentGuid.cachedComponent.GetType()).image };
             icon.name = "guid-component-icon";
