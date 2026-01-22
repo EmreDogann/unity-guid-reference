@@ -7,11 +7,25 @@ using UnityEngine;
 
 public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackReceiver
 {
+    public enum GuidState
+    {
+        None,
+        Owned,
+        Orphaned
+    }
+
+    [Serializable]
+    public class GuidItem
+    {
+        public GuidState state;
+        public SerializableGuid guid;
+    }
+
     [Serializable]
     public class GuidRecord
     {
-        public SerializableGuid gameObjectGUID;
-        public SerializableDictionary<string, SerializableGuid> componentGUIDs;
+        public GuidItem gameObjectGuid;
+        public SerializableDictionary<string, GuidItem> componentGuids;
     }
 
     private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
@@ -26,10 +40,24 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         Set(key.ToString(), guids);
     }
 
+    public void SetComponent(GuidRecord record, GlobalObjectId componentKey, GuidItem item)
+    {
+        Undo.RecordObject(this, "Add GUID Component Mapping");
+        record.componentGuids[componentKey.ToString()] = item;
+        EditorUtility.SetDirty(this);
+    }
+
     public void Set(string key, GuidRecord guids)
     {
         Undo.RecordObject(this, "Add GUID Mapping");
         _map[key] = guids;
+        EditorUtility.SetDirty(this);
+    }
+
+    public void SetState(GuidItem item, GuidState state)
+    {
+        Undo.RecordObject(this, "Orphaned GUID Mapping");
+        item.state = state;
         EditorUtility.SetDirty(this);
     }
 

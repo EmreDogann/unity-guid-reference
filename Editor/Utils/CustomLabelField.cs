@@ -5,7 +5,7 @@ public class CustomLabelField : BaseField<string>
     // Exposed for customization
     private readonly VisualElement ContentElement;
 
-    public CustomLabelField(string labelText)
+    public CustomLabelField(string labelText = "")
         : base(labelText, new VisualElement())
     {
         focusable = true;
@@ -18,15 +18,12 @@ public class CustomLabelField : BaseField<string>
         AddToClassList(alignedFieldUssClassName);
 
         StyleSheetUtility.ApplyCurrentTheme(this);
-
-        // Add extra 1px to bottom margin, due to off-by-1 pixel offset compared to default fields like Object/Property fields.
-        labelElement.style.marginBottom = 1;
     }
 
     /// <summary>
     ///     Replace the label area with custom UI.
     /// </summary>
-    public void SetCustomLabel(VisualElement customLabel)
+    public void SetCustomLabel(VisualElement customLabel, bool shouldClear = false)
     {
         labelElement.Clear();
         labelElement.Add(customLabel);

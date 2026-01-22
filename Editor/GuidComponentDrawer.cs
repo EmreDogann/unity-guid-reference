@@ -2,13 +2,19 @@
 using Sisus.ComponentNames;
 #endif
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Unity.Profiling;
 using UnityEditor;
+using UnityEditor.Search;
 using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.Search;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
+using ObjectField = UnityEditor.UIElements.ObjectField;
+
+// using ObjectField = UnityEditor.Search.ObjectField;
 
 [CustomEditor(typeof(GuidComponent))]
 public class GuidComponentDrawer : Editor
@@ -31,7 +37,6 @@ public class GuidComponentDrawer : Editor
         }
 
         root.RegisterCallback<AttachToPanelEvent>(_ => ObjectChangeEvents.changesPublished += ChangesPublished);
-
         root.RegisterCallback<DetachFromPanelEvent>(_ => ObjectChangeEvents.changesPublished -= ChangesPublished);
 
         _serializedGuidProp = serializedObject.FindProperty("_guid");
@@ -57,12 +62,25 @@ public class GuidComponentDrawer : Editor
 
             VisualElement element = new VisualElement
             {
-                style = { flexDirection = FlexDirection.Row }
+                focusable = true,
+                delegatesFocus = true,
+                style =
+                {
+                    flexDirection = FlexDirection.Row
+                }
             };
+
+            element.RegisterCallback<GeometryChangedEvent>(_ => { element.MarkDirtyRepaint(); });
 
             TextField textField = new TextField("Game Object")
             {
-                isReadOnly = true
+                isReadOnly = true,
+                style =
+                {
+                    // This is required when parented to an empty Visual Element, otherwise the children inside that
+                    // will not change layout when it resizes, and therefore not compute the new aligned field values.
+                    flexGrow = 1
+                }
             };
             textField.AddToClassList(TextField.alignedFieldUssClassName);
             textField.AddToClassList(".guid-component__guid-text-field");
@@ -109,7 +127,6 @@ public class GuidComponentDrawer : Editor
 
     private void ChangesPublished(ref ObjectChangeEventStream stream)
     {
-        Debug.Log("ChangesPublished");
         bool needsComponentListRebuilding = false;
         for (int i = 0; i < stream.length; ++i)
         {
@@ -147,6 +164,7 @@ public class GuidComponentDrawer : Editor
 #endif
 
             labelFieldComponentGuid.isReadOnly = true;
+            labelFieldComponentGuid.style.flexGrow = 1;
             labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
             labelFieldComponentGuid.value = componentGuid.Guid.ToString();
 
@@ -158,6 +176,171 @@ public class GuidComponentDrawer : Editor
 
             parent.Add(element);
         }
+
+        foreach (SerializableGuid orphanedGuid in GuidManagerEditor.GetOrphanedGuids(_guidComp))
+        {
+            string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this guid.";
+            VisualElement element = new VisualElement
+            {
+                style =
+                {
+                    flexDirection = FlexDirection.Row,
+                    alignItems = Align.Center
+                }
+            };
+
+            ObjectField objectFieldOrphanedGuid = new ObjectField
+            {
+                tooltip = tooltip,
+                objectType = typeof(Component)
+            };
+            // SetupComponentPicker(objectFieldOrphanedGuid);
+            objectFieldOrphanedGuid.name = "error-guid-orphaned-object-field";
+            objectFieldOrphanedGuid.RegisterValueChangedCallback(evt => {});
+
+            objectFieldOrphanedGuid.RegisterCallback<DragUpdatedEvent>(evt =>
+            {
+                Component draggedObject = DragAndDrop.objectReferences[0] as Component;
+                if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject))
+                {
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+                    evt.StopImmediatePropagation();
+                }
+            }, TrickleDown.TrickleDown);
+
+            // Override the object selector with our custom one.
+            VisualElement oldObjectSelector = objectFieldOrphanedGuid.Q(null, ObjectField.selectorUssClassName);
+            VisualElement objectSelector = new VisualElement();
+            objectSelector.AddToClassList(ObjectField.selectorUssClassName);
+
+            oldObjectSelector.parent.Add(objectSelector);
+            oldObjectSelector.RemoveFromHierarchy();
+
+            objectSelector.RegisterCallback<MouseUpEvent>(evt =>
+            {
+                if (evt.button == 0)
+                {
+                    SetupComponentPicker(objectFieldOrphanedGuid);
+                    evt.StopPropagation();
+                }
+            });
+
+            TextField labelFieldComponentGuid = new TextField
+            {
+                isReadOnly = true,
+                style =
+                {
+                    flexGrow = 1
+                },
+                tooltip = tooltip
+            };
+            labelFieldComponentGuid.name = "error-guid-orphaned-label";
+            labelFieldComponentGuid.value = orphanedGuid.ToString();
+
+            // Ugly hack so the label section is aligned, if label is empty it won't call the align functions.
+            CustomLabelField customField = new CustomLabelField(" ");
+            customField.style.flexGrow = 1;
+            customField.labelElement.style.flexDirection = FlexDirection.Row;
+            customField.labelElement.name = "error-guid-orphaned-field";
+            customField.labelElement.tooltip = tooltip;
+
+            customField.SetCustomLabel(objectFieldOrphanedGuid);
+            customField.SetCustomContent(labelFieldComponentGuid);
+
+            Image icon = new Image { image = EditorGUIUtility.IconContent("Error").image };
+            icon.name = "guid-component-icon";
+            element.Add(icon);
+            element.Add(customField);
+
+            parent.Add(element);
+        }
+    }
+
+    private void SetupComponentPicker(ObjectField objectField)
+    {
+        SearchProvider searchProvider = new SearchProvider("local_components", "Local Components")
+        {
+            showDetailsOptions = ShowDetailsOptions.None,
+            fetchItems = (context, items, provider) => ComponentPickerFetchItemsHandler(context, provider),
+            fetchThumbnail = (item, context) => item.thumbnail,
+            fetchLabel = (item, context) => item.label,
+            fetchDescription = (item, searchContext) => item.description,
+            toObject = (item, type) => item.data as Component,
+            active = true
+        };
+
+        SearchContext context = SearchService.CreateContext(searchProvider);
+        context.wantsMore = true;
+
+        SearchViewState viewState = new SearchViewState(context,
+            SearchViewFlags.ObjectPicker | SearchViewFlags.CompactView | SearchViewFlags.DisableInspectorPreview |
+            SearchViewFlags.HideSearchBar)
+        {
+            windowTitle = new GUIContent($"{_guidComp.gameObject.name} Component Selector"),
+            title = "Component",
+            selectHandler = ComponentPickerSelectHandler,
+            trackingHandler = ComponentPickerTrackingHandler,
+            position = SearchUtils.GetMainWindowCenteredPosition(new Vector2(600, 400)),
+            hideTabs = true,
+            group = "all",
+            queryBuilderEnabled = false
+        };
+
+        // objectField.searchContext = context;
+        // objectField.searchViewState = viewState;
+        SearchService.ShowPicker(viewState);
+    }
+
+    private IEnumerable<SearchItem> ComponentPickerFetchItemsHandler(SearchContext searchContext,
+        SearchProvider searchProvider)
+    {
+        if (_guidComp.gameObject == null)
+        {
+            yield break;
+        }
+
+        int index = 0;
+        foreach (Component component in _guidComp.gameObject.GetComponents<Component>())
+        {
+            if (GuidComponentExcluders.Excluders.Contains(component.GetType()))
+            {
+                continue;
+            }
+
+            if (_guidComp.componentGUIDs.Exists(guid => guid.cachedComponent == component))
+            {
+                continue;
+            }
+
+            yield return searchProvider.CreateItem(searchContext, component.GetEntityId().ToString(), index++,
+                component.GetType().Name,
+                component.GetType().Name,
+                (Texture2D)EditorGUIUtility.ObjectContent(null, component.GetType()).image, component);
+        }
+    }
+
+    private void ComponentPickerSelectHandler(SearchItem searchItem, bool canceled)
+    {
+        if (canceled)
+        {
+            return;
+        }
+
+        // GuidManagerEditor.SetGuidState(_guidComp.gameObject,);
+        searchItem.ToObject<Component>();
+    }
+
+    private static void ComponentPickerTrackingHandler(SearchItem searchItem) {}
+
+    // Helper method: checks if candidate is a child of parent
+    private bool IsChildOf(GameObject candidate, GameObject parent)
+    {
+        if (candidate == null || parent == null)
+        {
+            return false;
+        }
+
+        return candidate.transform.IsChildOf(parent.transform);
     }
 
     // ---- Header GUI ----

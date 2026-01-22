@@ -30,8 +30,11 @@ public class GuidManagerEditor
         GetOrCreateMappings().Set(key,
             new GuidReferenceMappings.GuidRecord
             {
-                gameObjectGUID = SerializableGuid.Create(component.GetGuid()),
-                componentGUIDs = new SerializableDictionary<string, SerializableGuid>()
+                gameObjectGuid = new GuidReferenceMappings.GuidItem
+                {
+                    guid = SerializableGuid.Create(component.GetGuid()), state = GuidReferenceMappings.GuidState.Owned
+                },
+                componentGuids = new SerializableDictionary<string, GuidReferenceMappings.GuidItem>()
             });
     }
 
@@ -42,9 +45,15 @@ public class GuidManagerEditor
 
         if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord record))
         {
-            if (!record.componentGUIDs.TryGetValue(componentKey.ToString(), out SerializableGuid _))
+            if (!record.componentGuids.TryGetValue(componentKey.ToString(), out GuidReferenceMappings.GuidItem _))
             {
-                record.componentGUIDs[componentKey.ToString()] = componentGuid.Guid;
+                GuidReferenceMappings.GuidItem item = new GuidReferenceMappings.GuidItem
+                {
+                    guid = componentGuid.Guid,
+                    state = GuidReferenceMappings.GuidState.Owned
+                };
+
+                GetOrCreateMappings().SetComponent(record, componentKey, item);
             }
         }
     }
@@ -68,7 +77,7 @@ public class GuidManagerEditor
 
         if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
         {
-            guidRecord.componentGUIDs.Remove(componentKey);
+            guidRecord.componentGuids.Remove(componentKey);
         }
     }
 
@@ -78,8 +87,8 @@ public class GuidManagerEditor
 
         if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
         {
-            var componentKey = guidRecord.componentGUIDs.First(pair => pair.Value == c.Guid);
-            guidRecord.componentGUIDs.Remove(componentKey.Key);
+            var componentKey = guidRecord.componentGuids.First(pair => pair.Value.guid == c.Guid);
+            guidRecord.componentGuids.Remove(componentKey.Key);
         }
     }
 
@@ -97,7 +106,7 @@ public class GuidManagerEditor
 
         if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
         {
-            guid = guidRecord.gameObjectGUID.Guid;
+            guid = guidRecord.gameObjectGuid.guid.Guid;
             return true;
         }
 
@@ -119,11 +128,20 @@ public class GuidManagerEditor
 
         if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
         {
-            bool result =
-                guidRecord.componentGUIDs.TryGetValue(componentKey.ToString(), out SerializableGuid serializableGuid);
-            guid = result ? serializableGuid.Guid : Guid.NewGuid();
+            bool found =
+                guidRecord.componentGuids.TryGetValue(componentKey.ToString(),
+                    out GuidReferenceMappings.GuidItem guidItem);
+            if (found)
+            {
+                guidItem.state = GuidReferenceMappings.GuidState.Owned;
+                guid = guidItem.guid.Guid;
+            }
+            else
+            {
+                guid = Guid.NewGuid();
+            }
 
-            return result;
+            return found;
         }
 
         guid = Guid.NewGuid();
@@ -164,6 +182,52 @@ public class GuidManagerEditor
         }
     }
 
+    public static IEnumerable<SerializableGuid> GetOrphanedGuids(GuidComponent guidComponent)
+    {
+        var serializableGuids = new List<SerializableGuid>();
+        GlobalObjectId key = GlobalObjectId.GetGlobalObjectIdSlow(guidComponent.gameObject);
+        // GlobalObjectID.identifierType 2 = Scene Object
+        if (key.identifierType != 2)
+        {
+            return null;
+        }
+
+        if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
+        {
+            foreach (GuidReferenceMappings.GuidItem guidItem in guidRecord.componentGuids.Values)
+            {
+                if (guidItem.state == GuidReferenceMappings.GuidState.Orphaned)
+                {
+                    serializableGuids.Add(guidItem.guid);
+                }
+            }
+        }
+
+        return serializableGuids;
+    }
+
+    public static void SetGuidState(GameObject gameObject, SerializableGuid guid, GuidReferenceMappings.GuidState state)
+    {
+        GlobalObjectId key = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
+        // GlobalObjectID.identifierType 2 = Scene Object
+        if (key.identifierType != 2)
+        {
+            return;
+        }
+
+        if (GetOrCreateMappings().TryGet(key, out GuidReferenceMappings.GuidRecord guidRecord))
+        {
+            foreach (GuidReferenceMappings.GuidItem guidItem in guidRecord.componentGuids.Values)
+            {
+                if (guidItem.guid == guid)
+                {
+                    GetOrCreateMappings().SetState(guidItem, state);
+                    break;
+                }
+            }
+        }
+    }
+
     static GuidManagerEditor()
     {
         GuidReferenceMappings = GuidReferenceMappings.GetOrCreate();
@@ -173,9 +237,17 @@ public class GuidManagerEditor
         GuidComponent.OnComponentGuidRequested -= TryRestoreOrCreateComponent;
         GuidComponent.OnComponentGuidRequested += TryRestoreOrCreateComponent;
 
+        GuidComponent.OnComponentGuidRemoved -= OnComponentRemoved;
+        GuidComponent.OnComponentGuidRemoved += OnComponentRemoved;
+
         ObjectChangeEvents.changesPublished -= ChangesPublished;
         ObjectChangeEvents.changesPublished += ChangesPublished;
         // ObjectFactory.componentWasAdded += OnComponentAdded;
+    }
+
+    private static void OnComponentRemoved(GuidComponent parentComponent, ComponentGuid guid)
+    {
+        SetGuidState(parentComponent.gameObject, guid.Guid, GuidReferenceMappings.GuidState.Orphaned);
     }
 
     private static void ChangesPublished(ref ObjectChangeEventStream stream)
@@ -213,6 +285,20 @@ public class GuidManagerEditor
                     GameObject gameObjectStructure =
                         EditorUtility.EntityIdToObject(changeGameObjectStructure.instanceId) as GameObject;
                     Debug.Log($"{type}: {gameObjectStructure} in scene {changeGameObjectStructure.scene}.");
+
+                    // GuidComponent guidComponent = gameObjectStructure.GetComponent<GuidComponent>();
+                    // if (guidComponent)
+                    // {
+                    //     foreach (ComponentGuid componentGuid in guidComponent.componentGUIDs)
+                    //     {
+                    //         if (!componentGuid.cachedComponent)
+                    //         {
+                    //             SetGuidState(gameObjectStructure, componentGuid.Guid,
+                    //                 GuidReferenceMappings.GuidState.Orphaned);
+                    //         }
+                    //     }
+                    // }
+
                     break;
                 case ObjectChangeKind.ChangeGameObjectParent:
                     stream.GetChangeGameObjectParentEvent(i,

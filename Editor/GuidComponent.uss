@@ -1,3 +1,8 @@
+CustomLabelField > Label {
+    /* Add extra 1 px to bottom margin, due to off-by-1 pixel offset compared to default fields like Object / Property fields. */
+    margin-bottom: 1px;
+}
+
 CustomLabelField:focus > * > .guid-component__guid-value {
     color: var(--unity-colors-label-text-focus);
 }
@@ -8,10 +13,14 @@ TextField:focus:enabled > #unity-text-input {
 
 TextField > #unity-text-input {
     border-width: 0;
-    margin: 1 0;
+    margin: 1px 0;
     padding-left: 0;
     padding-right: 0;
     background-color: transparent;
+}
+
+TextField > * > TextElement {
+    -unity-font-definition: resource("RobotoMono-Regular SDF");
 }
 
 TextField > #unity-text-input:hover {
@@ -23,4 +32,25 @@ TextField > #unity-text-input:hover {
     width: 16px;
     height: 16px;
     align-self: center;
+}
+
+#error-guid-orphaned-field {
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+
+#error-guid-orphaned-label {
+    margin: 0;
+}
+
+#error-guid-orphaned-label > * > TextElement {
+    color: var(--unity-colors-error-text);
+    -unity-font-definition: resource("RobotoMono-Regular SDF");
+}
+
+#error-guid-orphaned-object-field {
+    margin: 0;
+    min-width: 150px;
 }
