@@ -37,6 +37,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 #if UNITY_EDITOR
     public static event Action<GuidComponent> OnGameObjectGuidRequested;
     public static event Action<GuidComponent, ComponentGuid> OnComponentGuidRequested;
+    public static event Action<GuidComponent, ComponentGuid> OnComponentGuidRemoved;
 #endif
 
     private static bool IsSerializedGuidValid(byte[] serializedGuidArray)
@@ -420,7 +421,16 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             componentGuid.SerializedGuid_Editor = componentGuid.Guid.Guid.ToByteArray();
         }
 
-        componentGUIDs.RemoveAll(guid => !guid.cachedComponent);
+        componentGUIDs.RemoveAll(guid =>
+        {
+            bool isMissing = !guid.cachedComponent;
+            if (isMissing)
+            {
+                OnComponentGuidRemoved?.Invoke(this, guid);
+            }
+
+            return isMissing;
+        });
         componentGUIDs = componentGUIDs.OrderBy(guid => guid.cachedComponent.GetComponentIndex()).ToList();
     }
 #endif
