@@ -222,7 +222,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         keys.Clear();
         values.Clear();
 
-        foreach (string key in _map.Keys.OrderBy(k => k))
+        foreach (string key in _map.Keys)
         {
             keys.Add(key);
             values.Add(_map[key]);
