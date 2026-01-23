@@ -18,14 +18,47 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
     public class GuidItem
     {
         public GuidState state;
+        public SerializableType ownerType;
+        public string globalObjectID;
         public SerializableGuid guid;
     }
 
     [Serializable]
     public class GuidRecord
     {
-        public GuidItem gameObjectGuid;
+        public GuidItem transformGuid;
         public SerializableDictionary<string, GuidItem> componentGuids;
+    }
+
+    public readonly struct GuidRecordQuery
+    {
+        public readonly string TransformKey;
+        public readonly string ComponentKey;
+        public readonly Guid ComponentGuid;
+
+        public GuidRecordQuery(string transformKey, string componentKey = "", Guid componentGuid = default)
+        {
+            TransformKey = transformKey;
+            ComponentKey = componentKey;
+            ComponentGuid = componentGuid;
+        }
+
+        public bool IsTransformKeyValid()
+        {
+            if (string.IsNullOrEmpty(TransformKey))
+            {
+                Debug.LogError(
+                    "[GuidReferenceMappings] Error: GuidRecordQuery.TransformKey must have a valid GlobalObjectID!");
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool IsComponentKeyValid()
+        {
+            return !string.IsNullOrEmpty(ComponentKey);
+        }
     }
 
     private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
@@ -35,23 +68,52 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
     [SerializeField] private List<string> keys = new List<string>();
     [SerializeField] private List<GuidRecord> values = new List<GuidRecord>();
 
-    public void Set(GlobalObjectId key, GuidRecord guids)
+    public void Add(GuidRecordQuery query, GuidItem guidItem, bool overwriteIfExists = false)
     {
-        Set(key.ToString(), guids);
-    }
+        if (!query.IsTransformKeyValid())
+        {
+            return;
+        }
 
-    public void SetComponent(GuidRecord record, GlobalObjectId componentKey, GuidItem item)
-    {
-        Undo.RecordObject(this, "Add GUID Component Mapping");
-        record.componentGuids[componentKey.ToString()] = item;
-        EditorUtility.SetDirty(this);
-    }
+        Undo.RecordObject(this, "Added GUID Mapping");
 
-    public void Set(string key, GuidRecord guids)
-    {
-        Undo.RecordObject(this, "Add GUID Mapping");
-        _map[key] = guids;
-        EditorUtility.SetDirty(this);
+        if (!_map.TryGetValue(query.TransformKey, out GuidRecord guidRecord))
+        {
+            guidRecord = new GuidRecord { componentGuids = new SerializableDictionary<string, GuidItem>() };
+            _map.Add(query.TransformKey, guidRecord);
+        }
+
+        if (query.IsComponentKeyValid())
+        {
+            if (overwriteIfExists)
+            {
+                guidRecord.componentGuids[query.ComponentKey] = guidItem;
+                EditorUtility.SetDirty(this);
+            }
+            else
+            {
+                if (guidRecord.componentGuids.TryAdd(query.ComponentKey, guidItem))
+                {
+                    EditorUtility.SetDirty(this);
+                }
+            }
+        }
+        else if (query.ComponentGuid != Guid.Empty)
+        {
+            foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
+            {
+                if (componentGuid.guid.Guid == query.ComponentGuid)
+                {
+                    guidRecord.componentGuids[componentGuid.globalObjectID] = guidItem;
+                    EditorUtility.SetDirty(this);
+                }
+            }
+        }
+        else
+        {
+            guidRecord.transformGuid = guidItem;
+            EditorUtility.SetDirty(this);
+        }
     }
 
     public void SetState(GuidItem item, GuidState state)
@@ -61,26 +123,97 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         EditorUtility.SetDirty(this);
     }
 
-    public void Remove(GlobalObjectId key)
+    public void Remove(GuidRecordQuery query)
     {
-        Remove(key.ToString());
+        if (!query.IsTransformKeyValid())
+        {
+            return;
+        }
+
+        bool containsTransform = _map.TryGetValue(query.TransformKey, out GuidRecord guidRecord);
+        if (containsTransform)
+        {
+            Undo.RecordObject(this, "Remove GUID Mapping");
+            if (query.IsComponentKeyValid())
+            {
+                if (guidRecord.componentGuids.TryGetValue(query.ComponentKey, out GuidItem guidItem))
+                {
+                    guidRecord.componentGuids.Remove(guidItem.globalObjectID);
+                    EditorUtility.SetDirty(this);
+                    return;
+                }
+            }
+
+            if (query.ComponentGuid != Guid.Empty)
+            {
+                foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
+                {
+                    if (componentGuid.guid.Guid == query.ComponentGuid)
+                    {
+                        guidRecord.componentGuids.Remove(componentGuid.globalObjectID);
+                        EditorUtility.SetDirty(this);
+                    }
+                }
+
+                return;
+            }
+
+            _map.Remove(guidRecord.transformGuid.globalObjectID);
+            EditorUtility.SetDirty(this);
+        }
     }
 
-    public void Remove(string key)
+    public bool Contains(GuidRecordQuery query)
     {
-        Undo.RecordObject(this, "Remove GUID Mapping");
-        _map.Remove(key);
-        EditorUtility.SetDirty(this);
+        if (!query.IsTransformKeyValid())
+        {
+            return false;
+        }
+
+        bool containsTransform = _map.TryGetValue(query.TransformKey, out GuidRecord value);
+        if (query.IsComponentKeyValid() && value != null)
+        {
+            return value.componentGuids.ContainsKey(query.ComponentKey);
+        }
+
+        return containsTransform;
     }
 
-    public bool TryGet(GlobalObjectId key, out GuidRecord guidRecord)
+    public bool TryGet(GuidRecordQuery query, out GuidRecord guidRecord, out GuidItem guidItem)
     {
-        return TryGet(key.ToString(), out guidRecord);
-    }
+        guidRecord = null;
+        guidItem = null;
+        if (!query.IsTransformKeyValid())
+        {
+            return false;
+        }
 
-    public bool TryGet(string key, out GuidRecord guidRecord)
-    {
-        return _map.TryGetValue(key, out guidRecord);
+        bool containsTransform = _map.TryGetValue(query.TransformKey, out guidRecord);
+        if (containsTransform)
+        {
+            if (query.IsComponentKeyValid())
+            {
+                return guidRecord.componentGuids.TryGetValue(query.ComponentKey, out guidItem);
+            }
+
+            if (query.ComponentGuid != Guid.Empty)
+            {
+                foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
+                {
+                    if (componentGuid.guid.Guid == query.ComponentGuid)
+                    {
+                        guidItem = componentGuid;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            guidItem = guidRecord.transformGuid;
+        }
+
+        return containsTransform;
     }
 
     // Serialize

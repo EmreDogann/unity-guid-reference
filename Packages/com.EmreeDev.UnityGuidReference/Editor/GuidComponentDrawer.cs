@@ -12,9 +12,7 @@ using UnityEngine;
 using UnityEngine.Search;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
-using ObjectField = UnityEditor.UIElements.ObjectField;
-
-// using ObjectField = UnityEditor.Search.ObjectField;
+using ObjectField = UnityEditor.Search.ObjectField;
 
 [CustomEditor(typeof(GuidComponent))]
 public class GuidComponentDrawer : Editor
@@ -25,7 +23,7 @@ public class GuidComponentDrawer : Editor
 
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
-    private SerializedProperty _serializedGuidProp;
+    private SerializedProperty _transformGuidProp;
 
     public override VisualElement CreateInspectorGUI()
     {
@@ -39,7 +37,7 @@ public class GuidComponentDrawer : Editor
         root.RegisterCallback<AttachToPanelEvent>(_ => ObjectChangeEvents.changesPublished += ChangesPublished);
         root.RegisterCallback<DetachFromPanelEvent>(_ => ObjectChangeEvents.changesPublished -= ChangesPublished);
 
-        _serializedGuidProp = serializedObject.FindProperty("_guid");
+        _transformGuidProp = serializedObject.FindProperty(nameof(GuidComponent.transformGuid));
         _guidComp = (GuidComponent)serializedObject.targetObject;
 
         CreateHeaderGUI(root);
@@ -84,7 +82,7 @@ public class GuidComponentDrawer : Editor
             };
             textField.AddToClassList(TextField.alignedFieldUssClassName);
             textField.AddToClassList(".guid-component__guid-text-field");
-            textField.SetValueWithoutNotify(_guidComp._guid.ToString());
+            textField.SetValueWithoutNotify(_guidComp.transformGuid.serializableGuid.ToString());
 
             Image icon = new Image { image = EditorGUIUtility.ObjectContent(null, typeof(GameObject)).image };
             icon.name = "guid-component-icon";
@@ -98,7 +96,7 @@ public class GuidComponentDrawer : Editor
                 Foldout foldout = new Foldout
                 {
                     text = "Components",
-                    value = _serializedGuidProp.isExpanded,
+                    value = _transformGuidProp.isExpanded,
                     toggleOnLabelClick = true,
                     style = { unityFontStyleAndWeight = FontStyle.Bold }
                 };
@@ -113,9 +111,11 @@ public class GuidComponentDrawer : Editor
                 // Persist expansion state
                 foldout.RegisterValueChangedCallback(evt =>
                 {
-                    foldout.contentContainer.Clear();
                     if (evt.newValue)
                     {
+                        _transformGuidProp.isExpanded = evt.newValue;
+
+                        foldout.contentContainer.Clear();
                         RebuildGuidList(foldout.contentContainer);
                     }
                 });
@@ -160,16 +160,16 @@ public class GuidComponentDrawer : Editor
             TextField labelFieldComponentGuid = new TextField($"{componentGuid.cachedComponent.GetName()}");
 #else
             TextField labelFieldComponentGuid =
-                new TextField($"{ObjectNames.NicifyVariableName(componentGuid.cachedComponent.GetType().Name)}");
+                new TextField($"{ObjectNames.NicifyVariableName(componentGuid.CachedComponent.GetType().Name)}");
 #endif
 
             labelFieldComponentGuid.isReadOnly = true;
             labelFieldComponentGuid.style.flexGrow = 1;
             labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
-            labelFieldComponentGuid.value = componentGuid.Guid.ToString();
+            labelFieldComponentGuid.value = componentGuid.serializableGuid.ToString();
 
             Image icon = new Image
-                { image = EditorGUIUtility.ObjectContent(null, componentGuid.cachedComponent.GetType()).image };
+                { image = EditorGUIUtility.ObjectContent(null, componentGuid.CachedComponent.GetType()).image };
             icon.name = "guid-component-icon";
             element.Add(icon);
             element.Add(labelFieldComponentGuid);
@@ -177,9 +177,10 @@ public class GuidComponentDrawer : Editor
             parent.Add(element);
         }
 
-        foreach (SerializableGuid orphanedGuid in GuidManagerEditor.GetOrphanedGuids(_guidComp))
+        foreach (GuidReferenceMappings.GuidItem orphanedGuid in GuidManagerEditor.GetOrphanedGuids(_guidComp
+                     .transformGuid))
         {
-            string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this guid.";
+            string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this SerializableGuid.";
             VisualElement element = new VisualElement
             {
                 style =
@@ -192,38 +193,24 @@ public class GuidComponentDrawer : Editor
             ObjectField objectFieldOrphanedGuid = new ObjectField
             {
                 tooltip = tooltip,
-                objectType = typeof(Component)
+                objectType = orphanedGuid.ownerType.Type
             };
-            // SetupComponentPicker(objectFieldOrphanedGuid);
+
+            SetupComponentPicker(objectFieldOrphanedGuid);
+
             objectFieldOrphanedGuid.name = "error-guid-orphaned-object-field";
             objectFieldOrphanedGuid.RegisterValueChangedCallback(evt => {});
 
             objectFieldOrphanedGuid.RegisterCallback<DragUpdatedEvent>(evt =>
             {
                 Component draggedObject = DragAndDrop.objectReferences[0] as Component;
-                if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject))
+                if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject) ||
+                    draggedObject.GetType() != orphanedGuid.ownerType.Type)
                 {
                     DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
                     evt.StopImmediatePropagation();
                 }
             }, TrickleDown.TrickleDown);
-
-            // Override the object selector with our custom one.
-            VisualElement oldObjectSelector = objectFieldOrphanedGuid.Q(null, ObjectField.selectorUssClassName);
-            VisualElement objectSelector = new VisualElement();
-            objectSelector.AddToClassList(ObjectField.selectorUssClassName);
-
-            oldObjectSelector.parent.Add(objectSelector);
-            oldObjectSelector.RemoveFromHierarchy();
-
-            objectSelector.RegisterCallback<MouseUpEvent>(evt =>
-            {
-                if (evt.button == 0)
-                {
-                    SetupComponentPicker(objectFieldOrphanedGuid);
-                    evt.StopPropagation();
-                }
-            });
 
             TextField labelFieldComponentGuid = new TextField
             {
@@ -235,7 +222,7 @@ public class GuidComponentDrawer : Editor
                 tooltip = tooltip
             };
             labelFieldComponentGuid.name = "error-guid-orphaned-label";
-            labelFieldComponentGuid.value = orphanedGuid.ToString();
+            labelFieldComponentGuid.value = orphanedGuid.guid.ToString();
 
             // Ugly hack so the label section is aligned, if label is empty it won't call the align functions.
             CustomLabelField customField = new CustomLabelField(" ");
@@ -286,9 +273,8 @@ public class GuidComponentDrawer : Editor
             queryBuilderEnabled = false
         };
 
-        // objectField.searchContext = context;
-        // objectField.searchViewState = viewState;
-        SearchService.ShowPicker(viewState);
+        objectField.searchContext = context;
+        objectField.searchViewState = viewState;
     }
 
     private IEnumerable<SearchItem> ComponentPickerFetchItemsHandler(SearchContext searchContext,
@@ -307,7 +293,7 @@ public class GuidComponentDrawer : Editor
                 continue;
             }
 
-            if (_guidComp.componentGUIDs.Exists(guid => guid.cachedComponent == component))
+            if (_guidComp.componentGuids.Exists(guid => guid.CachedComponent == component))
             {
                 continue;
             }
