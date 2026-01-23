@@ -23,7 +23,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     internal ComponentGuid transformGuid;
     // Used to save out transformGuid as a way to prevent those serialized values from getting reset when Reset() is triggered or when applying prefab.
     // Reference: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/3
-    private ComponentGuid transformGuidDump;
+    private ComponentGuid _transformGuidDump;
 
     [SerializeField] internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
     // Used to save out componentGUIDs as a way to prevent those serialized values from getting reset when Reset() is triggered or when applying prefab.
@@ -31,14 +31,21 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     private readonly List<ComponentGuid> _componentGuidsDump = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
+    private readonly List<Component> _componentGuidCandidates = new List<Component>();
+
     public static event Action<ComponentGuid> OnGuidRequested;
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
 #endif
 
-    public IReadOnlyList<ComponentGuid> GetComponentGUIDs()
+    public IReadOnlyList<ComponentGuid> GetComponentGuids()
     {
         return componentGuids;
+    }
+
+    public IReadOnlyList<Component> GetComponentGuidCandidates()
+    {
+        return _componentGuidCandidates;
     }
 
     #region Equality
@@ -176,9 +183,9 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 #else
         // If our serialized data is invalid, either something went wrong, or we are a new object instantiated at runtime,
         // either way we need a new GUID
-        if (transformGuid.SerializableGuid == SerializableGuid.Empty)
+        if (transformGuid.serializableGuid == SerializableGuid.Empty)
         {
-            transformGuid.SerializableGuid = SerializableGuid.Create(Guid.NewGuid());
+            transformGuid.serializableGuid = SerializableGuid.Create(Guid.NewGuid());
         }
 #endif
 
@@ -244,7 +251,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         if (IsAssetOnDisk())
         {
             transformGuid.serializableGuid = SerializableGuid.Empty;
-            transformGuidDump = transformGuid;
+            _transformGuidDump = transformGuid;
 
             // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGuidsDump for reasoning.
             _componentGuidsDump.Clear();
@@ -257,7 +264,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         else
 #endif
         {
-            transformGuidDump = transformGuid;
+            _transformGuidDump = transformGuid;
             // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGuidsDump for reasoning.
             _componentGuidsDump.Clear();
             foreach (ComponentGuid componentGuid in componentGuids)
@@ -270,9 +277,9 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     // On load, we can go head a restore our system guids for later use
     void ISerializationCallbackReceiver.OnAfterDeserialize()
     {
-        if (transformGuidDump != null)
+        if (_transformGuidDump != null)
         {
-            transformGuid = transformGuidDump;
+            transformGuid = _transformGuidDump;
         }
 
         if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
@@ -296,6 +303,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
         FindOrCreateGuid(transformGuid);
 
+        _componentGuidCandidates.Clear();
         // Look for new components on the GameObject. Exclude component types specified in GuidComponentExcluders.
         foreach (Component component in gameObject.GetComponents<Component>())
         {
@@ -307,15 +315,12 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
             ComponentGuid componentGuid = componentGuids.FirstOrDefault(c => c.CachedComponent == component);
             if (componentGuid == null)
             {
-                componentGuid = new ComponentGuid
-                {
-                    CachedComponent = component,
-                    OwningGameObject = gameObject
-                };
-                componentGuids.Add(componentGuid);
+                _componentGuidCandidates.Add(component);
             }
-
-            FindOrCreateGuid(componentGuid);
+            else
+            {
+                FindOrCreateGuid(componentGuid);
+            }
         }
     }
 

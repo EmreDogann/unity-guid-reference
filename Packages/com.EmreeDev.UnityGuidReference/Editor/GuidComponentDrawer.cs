@@ -3,6 +3,7 @@ using Sisus.ComponentNames;
 #endif
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Unity.Profiling;
 using UnityEditor;
@@ -91,7 +92,7 @@ public class GuidComponentDrawer : Editor
 
             root.Add(element);
 
-            if (_guidComp.GetComponentGUIDs().Count > 0)
+            if (_guidComp.GetComponentGuids().Count > 0 || _guidComp.GetComponentGuidCandidates().Count > 0)
             {
                 Foldout foldout = new Foldout
                 {
@@ -150,14 +151,15 @@ public class GuidComponentDrawer : Editor
 
     private void RebuildGuidList(VisualElement parent)
     {
-        foreach (ComponentGuid componentGuid in _guidComp.GetComponentGUIDs())
+        var elements = new List<(VisualElement element, int index)>();
+        foreach (ComponentGuid componentGuid in _guidComp.GetComponentGuids())
         {
             VisualElement element = new VisualElement
             {
                 style = { flexDirection = FlexDirection.Row }
             };
 #if COMPONENT_NAMES
-            TextField labelFieldComponentGuid = new TextField($"{componentGuid.cachedComponent.GetName()}");
+            TextField labelFieldComponentGuid = new TextField($"{componentGuid.CachedComponent.GetName()}");
 #else
             TextField labelFieldComponentGuid =
                 new TextField($"{ObjectNames.NicifyVariableName(componentGuid.CachedComponent.GetType().Name)}");
@@ -174,7 +176,69 @@ public class GuidComponentDrawer : Editor
             element.Add(icon);
             element.Add(labelFieldComponentGuid);
 
-            parent.Add(element);
+            elements.Add((element, componentGuid.CachedComponent.GetComponentIndex()));
+        }
+
+        foreach (Component component in _guidComp.GetComponentGuidCandidates())
+        {
+            VisualElement element = new VisualElement
+            {
+                style = { flexDirection = FlexDirection.Row }
+            };
+#if COMPONENT_NAMES
+            TextField labelFieldComponentGuid = new TextField($"{component.GetName()}");
+#else
+            TextField labelFieldComponentGuid =
+                new TextField($"{ObjectNames.NicifyVariableName(component.GetType().Name)}");
+#endif
+
+            labelFieldComponentGuid.enabledSelf = false;
+            labelFieldComponentGuid.isReadOnly = true;
+            labelFieldComponentGuid.style.flexGrow = 1;
+            labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
+
+            Image icon = new Image
+            {
+                image = EditorGUIUtility.ObjectContent(null, component.GetType()).image,
+                name = "guid-component-icon"
+            };
+
+            Button button = new Button
+            {
+                iconImage = (Background)EditorGUIUtility.IconContent("CreateAddNew").image,
+                tooltip = "Assign Guid to component"
+            };
+
+            button.clickable.clicked += () =>
+            {
+                {
+                    Undo.RecordObject(_guidComp, "Assigning Guid to Component");
+                    _guidComp.componentGuids.Add(new ComponentGuid
+                    {
+                        CachedComponent = component,
+                        OwningGameObject = _guidComp.gameObject
+                    });
+
+                    serializedObject.Update();
+                    Undo.FlushUndoRecordObjects();
+                }
+
+                _componentGUIDsContainer.Clear();
+                _guidComp.OnValidate();
+                RebuildGuidList(_componentGUIDsContainer);
+            };
+
+            element.Add(icon);
+            element.Add(labelFieldComponentGuid);
+            element.Add(button);
+
+            elements.Add((element, component.GetComponentIndex()));
+        }
+
+        elements = elements.OrderBy(element => element.index).ToList();
+        foreach ((VisualElement element, int index) elementEntry in elements)
+        {
+            parent.Add(elementEntry.element);
         }
 
         foreach (GuidReferenceMappings.GuidItem orphanedGuid in GuidManagerEditor.GetOrphanedGuids(_guidComp
