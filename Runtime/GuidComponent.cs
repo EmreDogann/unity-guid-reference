@@ -38,16 +38,6 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     public static event Action<ComponentGuid> OnGuidRemoved;
 #endif
 
-    public IReadOnlyList<ComponentGuid> GetComponentGuids()
-    {
-        return componentGuids;
-    }
-
-    public IReadOnlyList<Component> GetComponentGuidCandidates()
-    {
-        return _componentGuidCandidates;
-    }
-
     #region Equality
 
     public static bool operator ==(GuidComponent guidComponent, GuidComponent otherGuidComponent)
@@ -143,6 +133,18 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 
     #endregion
 
+    #region Get Guids
+
+    public IReadOnlyList<ComponentGuid> GetComponentGuids()
+    {
+        return componentGuids;
+    }
+
+    public IReadOnlyList<Component> GetComponentGuidCandidates()
+    {
+        return _componentGuidCandidates;
+    }
+
     /// <summary>
     ///     Checks if there are GUIDs for multiple components of the same type.
     /// </summary>
@@ -162,6 +164,83 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     {
         return componentGuids.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf<T>()).Count > 1;
     }
+
+    /// <summary>
+    ///     Get the Guid of the GameObject this GuidComponent is attached to.
+    /// </summary>
+    /// <returns>Guid of the GameObject. Guid.Empty if not found.</returns>
+    public Guid GetGuid()
+    {
+        if (transformGuid.serializableGuid.Equals(SerializableGuid.Empty))
+        {
+            return SerializableGuid.Empty.Guid;
+        }
+
+        return transformGuid.serializableGuid.Guid;
+    }
+
+    /// <summary>
+    ///     Get the Guid of the Component on the same level as this GuidComponent.
+    /// </summary>
+    /// <remarks>This does not handle multiple components of the same type. Will just return the first component it finds.</remarks>
+    /// <param name="type">Type of component to look for.</param>
+    /// <returns>Guid of the Component. Guid.Empty if not found.</returns>
+    public Guid GetGuid(Type type)
+    {
+        if (type == GameObjectType)
+        {
+            return GetGuid();
+        }
+
+        foreach (ComponentGuid componentGuid in componentGuids.Where(componentGuid =>
+                     componentGuid.IsTypeOrSubclassOf(type)))
+        {
+            return componentGuid.serializableGuid.Guid;
+        }
+
+        return Guid.Empty;
+    }
+
+    /// <summary>
+    ///     Same as <see cref="GetGuid(Type)" />.
+    /// </summary>
+    /// <param name="component">The component which you want to find the SerializableGuid of.</param>
+    public Guid GetGuid(Component component)
+    {
+        if (component is GuidComponent)
+        {
+            return Guid.Empty;
+        }
+
+        foreach (ComponentGuid componentGuid in componentGuids.Where(componentGuid =>
+                     componentGuid.CachedComponent == component))
+        {
+            return componentGuid.serializableGuid.Guid;
+        }
+
+        return Guid.Empty;
+    }
+
+    /// <summary>
+    ///     Tried to get the component from a given SerializableGuid.
+    /// </summary>
+    /// <param name="guid">The SerializableGuid of the component to find.</param>
+    /// <returns>If found, returns the Component, otherwise null.</returns>
+    public Component GetComponentFromGuid(Guid guid)
+    {
+        SerializableGuid serializableGuid = SerializableGuid.Create(guid);
+        if (guid != transformGuid.serializableGuid.Guid)
+        {
+            return componentGuids
+                .Where(c => c.serializableGuid == serializableGuid)
+                .Select(componentGuid => componentGuid.CachedComponent)
+                .FirstOrDefault();
+        }
+
+        return null;
+    }
+
+    #endregion
 
     // When de-serializing or creating this GuidComponent, we want to either restore our serialized GUID or create a new one.
     // If the SerializableGuid already exists and is valid, then this function will just register the SerializableGuid with the GuidManager.
@@ -265,6 +344,7 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 #endif
         {
             _transformGuidDump = transformGuid;
+
             // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGuidsDump for reasoning.
             _componentGuidsDump.Clear();
             foreach (ComponentGuid componentGuid in componentGuids)
@@ -277,19 +357,33 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     // On load, we can go head a restore our system guids for later use
     void ISerializationCallbackReceiver.OnAfterDeserialize()
     {
-        if (_transformGuidDump != null)
+        // WARNING Ugly Hack:
+        // Unity does not like Undo.isProcessing being called during script compilation/domain reloading. This is the
+        // only way I know to get around this. As I cannot find a function that will reliably detect domain reloading.
+        // During normal serialization work though this runs fine -\__(*_*)__/-
+        try
         {
-            transformGuid = _transformGuidDump;
-        }
-
-        if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
-        {
-            componentGuids.Clear();
-            foreach (ComponentGuid componentGuid in _componentGuidsDump)
+            // After an Undo/Redo, it is possible the [x]Dump variables might be out-of-date, so don't restore.
+            if (Undo.isProcessing)
             {
-                componentGuids.Add(componentGuid);
+                return;
+            }
+
+            if (_transformGuidDump != null)
+            {
+                transformGuid = _transformGuidDump;
+            }
+
+            if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
+            {
+                componentGuids.Clear();
+                foreach (ComponentGuid componentGuid in _componentGuidsDump)
+                {
+                    componentGuids.Add(componentGuid);
+                }
             }
         }
+        catch (UnityException) {}
     }
 
     private void InitializeGuids()
@@ -378,81 +472,6 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         componentGuids = componentGuids.OrderBy(guid => guid.CachedComponent.GetComponentIndex()).ToList();
     }
 #endif
-
-    /// <summary>
-    ///     Get the Guid of the GameObject this GuidComponent is attached to.
-    /// </summary>
-    /// <returns>Guid of the GameObject. Guid.Empty if not found.</returns>
-    public Guid GetGuid()
-    {
-        if (transformGuid.serializableGuid.Equals(SerializableGuid.Empty))
-        {
-            return SerializableGuid.Empty.Guid;
-        }
-
-        return transformGuid.serializableGuid.Guid;
-    }
-
-    /// <summary>
-    ///     Get the Guid of the Component on the same level as this GuidComponent.
-    /// </summary>
-    /// <remarks>This does not handle multiple components of the same type. Will just return the first component it finds.</remarks>
-    /// <param name="type">Type of component to look for.</param>
-    /// <returns>Guid of the Component. Guid.Empty if not found.</returns>
-    public Guid GetGuid(Type type)
-    {
-        if (type == GameObjectType)
-        {
-            return GetGuid();
-        }
-
-        foreach (ComponentGuid componentGuid in componentGuids.Where(componentGuid =>
-                     componentGuid.IsTypeOrSubclassOf(type)))
-        {
-            return componentGuid.serializableGuid.Guid;
-        }
-
-        return Guid.Empty;
-    }
-
-    /// <summary>
-    ///     Same as <see cref="GetGuid(Type)" />.
-    /// </summary>
-    /// <param name="component">The component which you want to find the SerializableGuid of.</param>
-    public Guid GetGuid(Component component)
-    {
-        if (component is GuidComponent)
-        {
-            return Guid.Empty;
-        }
-
-        foreach (ComponentGuid componentGuid in componentGuids.Where(componentGuid =>
-                     componentGuid.CachedComponent == component))
-        {
-            return componentGuid.serializableGuid.Guid;
-        }
-
-        return Guid.Empty;
-    }
-
-    /// <summary>
-    ///     Tried to get the component from a given SerializableGuid.
-    /// </summary>
-    /// <param name="guid">The SerializableGuid of the component to find.</param>
-    /// <returns>If found, returns the Component, otherwise null.</returns>
-    public Component GetComponentFromGuid(Guid guid)
-    {
-        SerializableGuid serializableGuid = SerializableGuid.Create(guid);
-        if (guid != transformGuid.serializableGuid.Guid)
-        {
-            return componentGuids
-                .Where(c => c.serializableGuid == serializableGuid)
-                .Select(componentGuid => componentGuid.CachedComponent)
-                .FirstOrDefault();
-        }
-
-        return null;
-    }
 
     // Let the manager know we are gone, so other objects no longer find this.
     public void OnDestroy()

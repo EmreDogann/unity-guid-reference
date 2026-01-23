@@ -34,6 +34,11 @@ TextField > #unity-text-input:hover {
     align-self: center;
 }
 
+#guid-component-add-button {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
 #error-guid-orphaned-field {
     margin-bottom: 0;
     padding-top: 0;

@@ -135,6 +135,7 @@ public class GuidComponentDrawer : Editor
             switch (type)
             {
                 case ObjectChangeKind.ChangeGameObjectStructureHierarchy:
+                case ObjectChangeKind.ChangeGameObjectOrComponentProperties:
                 case ObjectChangeKind.ChangeGameObjectStructure:
                     needsComponentListRebuilding = true;
                     break;
@@ -144,7 +145,6 @@ public class GuidComponentDrawer : Editor
         if (needsComponentListRebuilding)
         {
             _componentGUIDsContainer.Clear();
-            _guidComp.OnValidate();
             RebuildGuidList(_componentGUIDsContainer);
         }
     }
@@ -206,25 +206,25 @@ public class GuidComponentDrawer : Editor
             Button button = new Button
             {
                 iconImage = (Background)EditorGUIUtility.IconContent("CreateAddNew").image,
+                name = "guid-component-add-button",
                 tooltip = "Assign Guid to component"
             };
 
             button.clickable.clicked += () =>
             {
+                Undo.RecordObject(_guidComp, "Assigning Guid to Component");
+                _guidComp.componentGuids.Add(new ComponentGuid
                 {
-                    Undo.RecordObject(_guidComp, "Assigning Guid to Component");
-                    _guidComp.componentGuids.Add(new ComponentGuid
-                    {
-                        CachedComponent = component,
-                        OwningGameObject = _guidComp.gameObject
-                    });
+                    CachedComponent = component,
+                    OwningGameObject = _guidComp.gameObject
+                });
 
-                    serializedObject.Update();
-                    Undo.FlushUndoRecordObjects();
-                }
+                _guidComp.OnValidate();
+                serializedObject.Update();
+
+                EditorUtility.SetDirty(_guidComp);
 
                 _componentGUIDsContainer.Clear();
-                _guidComp.OnValidate();
                 RebuildGuidList(_componentGUIDsContainer);
             };
 
