@@ -23,6 +23,12 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         public SerializableGuid guid;
     }
 
+    public class OrphanedGuidItemInfo
+    {
+        public GuidItem TransformGuid;
+        public GuidItem GuidItem;
+    }
+
     [Serializable]
     public class GuidRecord
     {

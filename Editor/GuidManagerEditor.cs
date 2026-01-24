@@ -48,17 +48,17 @@ public class GuidManagerEditor
         GetOrCreateMappings().Add(query, item);
     }
 
-    public static void Unregister(ComponentGuid componentGuid)
+    public static void Unregister(OrphanedGuidItemInfo orphanedGuid)
     {
-        if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
-        {
-            return;
-        }
+        Unregister(orphanedGuid.TransformGuid, orphanedGuid.GuidItem);
+    }
 
+    public static void Unregister(GuidItem owningTransformGuid, GuidItem guidItem)
+    {
         GuidRecordQuery query = new GuidRecordQuery(
-            componentGuid.GlobalGameObjectId,
-            componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId,
-            componentGuid.IsRootComponent() ? Guid.Empty : componentGuid.serializableGuid.Guid
+            owningTransformGuid.globalObjectID,
+            guidItem.globalObjectID,
+            guidItem.guid.Guid
         );
         GetOrCreateMappings().Remove(query);
     }
@@ -103,7 +103,7 @@ public class GuidManagerEditor
         }
     }
 
-    public static IEnumerable<GuidItem> GetOrphanedGuids(ComponentGuid componentGuid)
+    public static IEnumerable<OrphanedGuidItemInfo> GetOrphanedGuids(ComponentGuid componentGuid)
     {
         if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
         {
@@ -117,7 +117,11 @@ public class GuidManagerEditor
             {
                 if (guidItem.state == GuidState.Orphaned)
                 {
-                    yield return guidItem;
+                    yield return new OrphanedGuidItemInfo
+                    {
+                        TransformGuid = guidRecord.transformGuid,
+                        GuidItem = guidItem
+                    };
                 }
             }
         }

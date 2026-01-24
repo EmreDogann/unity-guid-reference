@@ -36,6 +36,16 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     public static event Action<ComponentGuid> OnGuidRequested;
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
+
+    // Purely for GuidComponentDrawer as external classes cannot invoke 'event' specified Actions.
+    internal void RemoveComponentGuid(ComponentGuid componentGuid)
+    {
+        if (componentGuid != null)
+        {
+            componentGuids.Remove(componentGuid);
+            OnGuidRemoved?.Invoke(componentGuid);
+        }
+    }
 #endif
 
     #region Equality
