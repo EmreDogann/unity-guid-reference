@@ -134,9 +134,10 @@ public class GuidComponentDrawer : Editor
             ObjectChangeKind type = stream.GetEventType(i);
             switch (type)
             {
-                case ObjectChangeKind.ChangeGameObjectStructureHierarchy:
-                case ObjectChangeKind.ChangeGameObjectOrComponentProperties:
-                case ObjectChangeKind.ChangeGameObjectStructure:
+                case ObjectChangeKind.ChangeGameObjectStructureHierarchy:    // Component Order changed.
+                case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // GuidComponent Changed.
+                case ObjectChangeKind.ChangeAssetObjectProperties:           // GuidReferenceMapping changed.
+                case ObjectChangeKind.ChangeGameObjectStructure:             // Game Object changed.
                     needsComponentListRebuilding = true;
                     break;
             }
@@ -144,13 +145,18 @@ public class GuidComponentDrawer : Editor
 
         if (needsComponentListRebuilding)
         {
-            _componentGUIDsContainer.Clear();
             RebuildGuidList(_componentGUIDsContainer);
         }
     }
 
     private void RebuildGuidList(VisualElement parent)
     {
+        _componentGUIDsContainer.Clear();
+
+        // -------------------
+        // Build Assigned List
+        // -------------------
+
         var elements = new List<(VisualElement element, int index)>();
         foreach (ComponentGuid componentGuid in _guidComp.GetComponentGuids())
         {
@@ -168,16 +174,51 @@ public class GuidComponentDrawer : Editor
             labelFieldComponentGuid.isReadOnly = true;
             labelFieldComponentGuid.style.flexGrow = 1;
             labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
-            labelFieldComponentGuid.value = componentGuid.serializableGuid.ToString();
+            labelFieldComponentGuid.SetValueWithoutNotify(componentGuid.serializableGuid.ToString());
+
+            labelFieldComponentGuid.labelElement.RegisterCallback<GeometryChangedEvent>(evt =>
+                labelFieldComponentGuid.labelElement.MarkDirtyRepaint());
 
             Image icon = new Image
-                { image = EditorGUIUtility.ObjectContent(null, componentGuid.CachedComponent.GetType()).image };
-            icon.name = "guid-component-icon";
+            {
+                image = EditorGUIUtility.ObjectContent(null, componentGuid.CachedComponent.GetType()).image,
+                name = "guid-component-icon"
+            };
+
+            Button button = new Button
+            {
+                name = "guid-component-button",
+                tooltip = "Orphan Guid",
+                style =
+                {
+                    backgroundImage = (StyleBackground)EditorGUIUtility.IconContent("Toolbar Minus").image
+                }
+            };
+            button.AddToClassList("remove-button");
+
+            button.clickable.clicked += () =>
+            {
+                Undo.RecordObject(_guidComp, "Orphaning Guid from Component");
+                _guidComp.RemoveComponentGuid(componentGuid);
+
+                _guidComp.OnValidate();
+                serializedObject.Update();
+
+                EditorUtility.SetDirty(_guidComp);
+
+                RebuildGuidList(_componentGUIDsContainer);
+            };
+            labelFieldComponentGuid[1].Add(button);
+
             element.Add(icon);
             element.Add(labelFieldComponentGuid);
 
             elements.Add((element, componentGuid.CachedComponent.GetComponentIndex()));
         }
+
+        // ------------------------------
+        // Build Candidate/Available List
+        // ------------------------------
 
         foreach (Component component in _guidComp.GetComponentGuidCandidates())
         {
@@ -205,10 +246,11 @@ public class GuidComponentDrawer : Editor
 
             Button button = new Button
             {
-                iconImage = (Background)EditorGUIUtility.IconContent("CreateAddNew").image,
-                name = "guid-component-add-button",
-                tooltip = "Assign Guid to component"
+                name = "guid-component-button",
+                tooltip = "Assign Guid",
+                style = { backgroundImage = (StyleBackground)EditorGUIUtility.IconContent("Toolbar Plus").image }
             };
+            button.AddToClassList("add-button");
 
             button.clickable.clicked += () =>
             {
@@ -224,7 +266,6 @@ public class GuidComponentDrawer : Editor
 
                 EditorUtility.SetDirty(_guidComp);
 
-                _componentGUIDsContainer.Clear();
                 RebuildGuidList(_componentGUIDsContainer);
             };
 
@@ -241,8 +282,24 @@ public class GuidComponentDrawer : Editor
             parent.Add(elementEntry.element);
         }
 
-        foreach (GuidReferenceMappings.GuidItem orphanedGuid in GuidManagerEditor.GetOrphanedGuids(_guidComp
-                     .transformGuid))
+        // -------------------
+        // Build Orphaned List
+        // -------------------
+
+        var orphanedList = GuidManagerEditor.GetOrphanedGuids(_guidComp.transformGuid).ToList();
+
+        if (orphanedList.Count > 0)
+        {
+            VisualElement separator = new VisualElement
+            {
+                enabledSelf = false,
+                focusable = false
+            };
+            separator.AddToClassList("horizontal-separator");
+            parent.Add(separator);
+        }
+
+        foreach (GuidReferenceMappings.OrphanedGuidItemInfo orphanedGuid in orphanedList)
         {
             string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this SerializableGuid.";
             VisualElement element = new VisualElement
@@ -257,7 +314,7 @@ public class GuidComponentDrawer : Editor
             ObjectField objectFieldOrphanedGuid = new ObjectField
             {
                 tooltip = tooltip,
-                objectType = orphanedGuid.ownerType.Type
+                objectType = orphanedGuid.GuidItem.ownerType.Type
             };
 
             SetupComponentPicker(objectFieldOrphanedGuid);
@@ -269,7 +326,7 @@ public class GuidComponentDrawer : Editor
             {
                 Component draggedObject = DragAndDrop.objectReferences[0] as Component;
                 if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject) ||
-                    draggedObject.GetType() != orphanedGuid.ownerType.Type)
+                    draggedObject.GetType() != orphanedGuid.GuidItem.ownerType.Type)
                 {
                     DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
                     evt.StopImmediatePropagation();
@@ -286,7 +343,7 @@ public class GuidComponentDrawer : Editor
                 tooltip = tooltip
             };
             labelFieldComponentGuid.name = "error-guid-orphaned-label";
-            labelFieldComponentGuid.value = orphanedGuid.guid.ToString();
+            labelFieldComponentGuid.value = orphanedGuid.GuidItem.guid.ToString();
 
             // Ugly hack so the label section is aligned, if label is empty it won't call the align functions.
             CustomLabelField customField = new CustomLabelField(" ");
@@ -297,6 +354,25 @@ public class GuidComponentDrawer : Editor
 
             customField.SetCustomLabel(objectFieldOrphanedGuid);
             customField.SetCustomContent(labelFieldComponentGuid);
+
+            Button button = new Button
+            {
+                name = "guid-component-button",
+                tooltip = "Delete Orphaned Guid",
+                style =
+                {
+                    backgroundImage = (StyleBackground)EditorGUIUtility.IconContent("Close").image
+                }
+            };
+            button.AddToClassList("remove-button");
+
+            button.clickable.clicked += () =>
+            {
+                GuidManagerEditor.Unregister(orphanedGuid);
+
+                RebuildGuidList(_componentGUIDsContainer);
+            };
+            labelFieldComponentGuid[0].Add(button);
 
             Image icon = new Image { image = EditorGUIUtility.IconContent("Error").image };
             icon.name = "guid-component-icon";
