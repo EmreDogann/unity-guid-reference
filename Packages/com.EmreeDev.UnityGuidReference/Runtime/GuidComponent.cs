@@ -30,6 +30,8 @@ public class GuidComponent : MonoBehaviour
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
 
+    private PlayModeStateChange _currentPlaymodeState;
+
     // Purely for GuidComponentDrawer as external classes cannot invoke 'event' specified Actions.
     internal void RemoveComponentGuid(ComponentGuid componentGuid)
     {
@@ -369,6 +371,8 @@ public class GuidComponent : MonoBehaviour
             return;
         }
 
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+
         Debug.Log("Awake()");
         InitializeGuids();
 #else
@@ -381,6 +385,11 @@ public class GuidComponent : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
+    {
+        _currentPlaymodeState = stateChange;
+    }
+
     private void Reset()
     {
         if (IsAssetOnDisk())
@@ -445,10 +454,13 @@ public class GuidComponent : MonoBehaviour
 #if UNITY_EDITOR
         Debug.Log("OnDestroy()");
 
-        if (IsAssetOnDisk() && !EditorApplication.isPlaying)
+        if (IsAssetOnDisk() || EditorApplication.isPlayingOrWillChangePlaymode ||
+            _currentPlaymodeState == PlayModeStateChange.ExitingPlayMode)
         {
             return;
         }
+
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 
         OnGuidRemoved?.Invoke(transformGuid);
         foreach (ComponentGuid componentGuid in componentGuids)
