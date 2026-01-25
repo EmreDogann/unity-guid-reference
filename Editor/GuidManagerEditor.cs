@@ -32,7 +32,7 @@ public class GuidManagerEditor
         GuidRecordQuery query = new GuidRecordQuery(
             componentGuid.GlobalGameObjectId,
             componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId,
-            Guid.Empty
+            SerializableGuid.Empty
         );
 
         GuidItem item = new GuidItem
@@ -50,17 +50,17 @@ public class GuidManagerEditor
 
     public static void Unregister(OrphanedGuidItemInfo orphanedGuid)
     {
-        Unregister(orphanedGuid.TransformGuid, orphanedGuid.GuidItem);
+        Unregister(orphanedGuid.TransformGuid, orphanedGuid.GuidItem, true);
     }
 
-    public static void Unregister(GuidItem owningTransformGuid, GuidItem guidItem)
+    public static void Unregister(GuidItem owningTransformGuid, GuidItem guidItem, bool isOrphaned = false)
     {
         GuidRecordQuery query = new GuidRecordQuery(
             owningTransformGuid.globalObjectID,
             guidItem.globalObjectID,
-            guidItem.guid.Guid
+            guidItem.guid
         );
-        GetOrCreateMappings().Remove(query);
+        GetOrCreateMappings().Remove(query, isOrphaned);
     }
 
     private static bool TryRestore(ComponentGuid componentGuid, out Guid guid)
@@ -107,7 +107,7 @@ public class GuidManagerEditor
         GuidRecordQuery query = new GuidRecordQuery(componentGuid.GlobalGameObjectId);
         if (GetOrCreateMappings().TryGet(query, out GuidRecord guidRecord, out _))
         {
-            foreach (GuidItem guidItem in guidRecord.componentGuids.Values)
+            foreach (GuidItem guidItem in guidRecord.orphanedGuids.Values)
             {
                 if (guidItem.state == GuidState.Orphaned)
                 {
@@ -121,15 +121,15 @@ public class GuidManagerEditor
         }
     }
 
-    public static void AdoptGuid(OrphanedGuidItemInfo orphanedGuidItemInfo, ComponentGuid componentGuid)
+    public static void AdoptGuid(GuidItem guidItem, ComponentGuid componentGuid)
     {
         if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId) ||
-            orphanedGuidItemInfo.GuidItem.ownerType.Type != componentGuid.CachedComponent.GetType())
+            guidItem.ownerType.Type != componentGuid.CachedComponent.GetType())
         {
             return;
         }
 
-        GetOrCreateMappings().AdoptGuid(orphanedGuidItemInfo, componentGuid.GlobalComponentId);
+        GetOrCreateMappings().AdoptGuid(guidItem, componentGuid.GlobalGameObjectId, componentGuid.GlobalComponentId);
     }
 
     static GuidManagerEditor()
@@ -151,12 +151,12 @@ public class GuidManagerEditor
         GuidRecordQuery query = new GuidRecordQuery(
             guid.GlobalGameObjectId,
             "", // Component is destroyed at this point, cannot retrieve it's GlobalObjectID, and it's too risky to use its cached one.
-            guid.IsRootComponent() ? Guid.Empty : guid.serializableGuid.Guid
+            guid.IsRootComponent() ? SerializableGuid.Empty : guid.serializableGuid
         );
 
-        if (GetOrCreateMappings().TryGet(query, out _, out GuidItem item))
+        if (GetOrCreateMappings().TryGet(query, out GuidRecord record, out GuidItem item))
         {
-            GetOrCreateMappings().SetState(item, GuidState.Orphaned);
+            GetOrCreateMappings().OrphanGuid(record.transformGuid.globalObjectID, guid.IsRootComponent() ? null : item);
         }
     }
 
