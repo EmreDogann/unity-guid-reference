@@ -121,15 +121,18 @@ public class GuidManagerEditor
         }
     }
 
-    public static void AdoptGuid(GuidItem guidItem, ComponentGuid componentGuid)
+    public static bool AdoptGuid(GuidItem guidItem, ComponentGuid componentGuid)
     {
         if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId) ||
             guidItem.ownerType.Type != componentGuid.CachedComponent.GetType())
         {
-            return;
+            return false;
         }
 
-        GetOrCreateMappings().AdoptGuid(guidItem, componentGuid.GlobalGameObjectId, componentGuid.GlobalComponentId);
+        return GetOrCreateMappings().AdoptGuid(guidItem,
+            componentGuid.GlobalGameObjectId,
+            componentGuid.GlobalComponentId
+        );
     }
 
     static GuidManagerEditor()

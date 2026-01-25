@@ -163,33 +163,27 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         }
     }
 
-    internal void AdoptGuid(GuidItem guidItem, string transformGlobalObjectId, string componentGlobalObjectId)
+    internal bool AdoptGuid(GuidItem guidItem, string transformGlobalObjectId, string componentGlobalObjectId)
     {
         Undo.RecordObject(this, "Adopting Guid");
 
         if (_map.TryGetValue(transformGlobalObjectId, out GuidRecord guidRecord))
         {
-            // if ()
-            // {
-            //     guidItem.state = GuidState.Owned;
-            //     guidItem.globalObjectID = componentGlobalObjectId;
-            //     guidRecord.componentGuids.Add(componentGlobalObjectId, itemInfo.GuidItem);
-            //     GuidRecordQuery query = new GuidRecordQuery(transformGlobalObjectId, componentGlobalObjectId);
-            //     Add(query, );
-            // }
-
-            if (guidRecord.orphanedGuids.TryGetValue(guidItem.guid, out GuidItem item) &&
-                guidItem.state == GuidState.Orphaned)
+            if (guidRecord.orphanedGuids.TryGetValue(guidItem.guid, out _) && guidItem.state == GuidState.Orphaned)
             {
                 guidItem.state = GuidState.Owned;
                 guidItem.globalObjectID = componentGlobalObjectId;
 
-                guidRecord.orphanedGuids.Remove(guidItem.globalObjectID);
+                guidRecord.orphanedGuids.Remove(guidItem.guid);
                 guidRecord.componentGuids.Add(componentGlobalObjectId, guidItem);
 
                 EditorUtility.SetDirty(this);
+
+                return true;
             }
         }
+
+        return false;
     }
 
     public void Remove(GuidRecordQuery query, bool isOrphaned)
