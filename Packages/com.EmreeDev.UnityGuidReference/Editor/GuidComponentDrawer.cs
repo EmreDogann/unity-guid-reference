@@ -129,18 +129,27 @@ public class GuidComponentDrawer : Editor
     private void ChangesPublished(ref ObjectChangeEventStream stream)
     {
         bool needsComponentListRebuilding = false;
+        bool needsNotifyGuidComponent = false;
         for (int i = 0; i < stream.length; ++i)
         {
             ObjectChangeKind type = stream.GetEventType(i);
             switch (type)
             {
+                case ObjectChangeKind.ChangeAssetObjectProperties: // GuidReferenceMapping changed.
+                    needsComponentListRebuilding = true;
+                    break;
                 case ObjectChangeKind.ChangeGameObjectStructureHierarchy:    // Component Order changed.
                 case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // GuidComponent Changed.
-                case ObjectChangeKind.ChangeAssetObjectProperties:           // GuidReferenceMapping changed.
                 case ObjectChangeKind.ChangeGameObjectStructure:             // Game Object changed.
+                    needsNotifyGuidComponent = true;
                     needsComponentListRebuilding = true;
                     break;
             }
+        }
+
+        if (needsNotifyGuidComponent)
+        {
+            _guidComp.OnValidate();
         }
 
         if (needsComponentListRebuilding)
@@ -206,12 +215,12 @@ public class GuidComponentDrawer : Editor
                 Undo.RecordObject(_guidComp, "Orphaning Guid from Component");
                 _guidComp.RemoveComponentGuid(componentGuid);
 
-                _guidComp.OnValidate();
+                // _guidComp.OnValidate();
                 serializedObject.Update();
 
                 EditorUtility.SetDirty(_guidComp);
 
-                RebuildGuidList(_componentGUIDsContainer);
+                // RebuildGuidList(_componentGUIDsContainer);
             };
             labelFieldComponentGuid.contentContainer.Add(button);
 
@@ -266,12 +275,12 @@ public class GuidComponentDrawer : Editor
                     OwningGameObject = _guidComp.gameObject
                 });
 
-                _guidComp.OnValidate();
+                // _guidComp.OnValidate();
                 serializedObject.Update();
 
                 EditorUtility.SetDirty(_guidComp);
 
-                RebuildGuidList(_componentGUIDsContainer);
+                // RebuildGuidList(_componentGUIDsContainer);
             };
 
             element.Add(icon);

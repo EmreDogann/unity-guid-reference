@@ -22,7 +22,7 @@ public class GuidManagerEditor
         return GuidReferenceMappings;
     }
 
-    private static void Register(ComponentGuid componentGuid)
+    private static void Register(ComponentGuid componentGuid, SerializableGuid guid)
     {
         if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
         {
@@ -37,7 +37,7 @@ public class GuidManagerEditor
 
         GuidItem item = new GuidItem
         {
-            guid = componentGuid.serializableGuid,
+            guid = guid,
             globalObjectID = componentGuid.IsRootComponent()
                 ? componentGuid.GlobalGameObjectId
                 : componentGuid.GlobalComponentId,
@@ -82,25 +82,19 @@ public class GuidManagerEditor
             return true;
         }
 
-        guid = Guid.NewGuid();
         return false;
     }
 
-    private static void TryRestoreOrCreateGuid(ComponentGuid componentGuid)
+    private static SerializableGuid TryRestoreOrCreateGuid(ComponentGuid componentGuid)
     {
         if (TryRestore(componentGuid, out Guid guid))
         {
-            componentGuid.serializableGuid = SerializableGuid.Create(guid);
+            return SerializableGuid.Create(guid);
         }
-        else if (guid != Guid.Empty)
-        {
-            componentGuid.serializableGuid = SerializableGuid.Create(guid);
-            Register(componentGuid);
-        }
-        else
-        {
-            componentGuid.serializableGuid = SerializableGuid.Empty;
-        }
+
+        SerializableGuid serializableGuid = SerializableGuid.Create(Guid.NewGuid());
+        Register(componentGuid, serializableGuid);
+        return serializableGuid;
     }
 
     public static IEnumerable<OrphanedGuidItemInfo> GetOrphanedGuids(ComponentGuid componentGuid)
@@ -147,8 +141,8 @@ public class GuidManagerEditor
         GuidComponent.OnGuidRemoved -= OnComponentRemoved;
         GuidComponent.OnGuidRemoved += OnComponentRemoved;
 
-        ObjectChangeEvents.changesPublished -= ChangesPublished;
-        ObjectChangeEvents.changesPublished += ChangesPublished;
+        // ObjectChangeEvents.changesPublished -= ChangesPublished;
+        // ObjectChangeEvents.changesPublished += ChangesPublished;
         // ObjectFactory.componentWasAdded += OnComponentAdded;
     }
 

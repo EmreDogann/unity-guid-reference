@@ -14,26 +14,19 @@ using UnityEditor.SceneManagement;
 ///     This can also be used for other systems, such as Save/Load game
 /// </summary>
 [ExecuteAlways] [DisallowMultipleComponent]
-public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
+public class GuidComponent : MonoBehaviour
 {
     private static readonly Type GameObjectType = typeof(GameObject);
 
-    // System SerializableGuid we use for comparison and generation
     [SerializeField]
     internal ComponentGuid transformGuid;
-    // Used to save out transformGuid as a way to prevent those serialized values from getting reset when Reset() is triggered or when applying prefab.
-    // Reference: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/3
-    private ComponentGuid _transformGuidDump;
 
     [SerializeField] internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
-    // Used to save out componentGUIDs as a way to prevent those serialized values from getting reset when Reset() is triggered or when applying prefab.
-    // Reference: https://discussions.unity.com/t/prevent-reset-from-clearing-out-serialized-fields/191838/3
-    private readonly List<ComponentGuid> _componentGuidsDump = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
     private readonly List<Component> _componentGuidCandidates = new List<Component>();
 
-    public static event Action<ComponentGuid> OnGuidRequested;
+    public static event Func<ComponentGuid, SerializableGuid> OnGuidRequested;
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
 
@@ -264,10 +257,16 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         }
         else
         {
+            Undo.RecordObject(this, "Restoring Component Guid");
             Debug.Log(
                 $"Requesting mapped or new {(componentGuid.CachedComponent ? componentGuid.CachedComponent.GetType() + " " : "")}SerializableGuid...");
             // If we don't have a cached SerializableGuid, then try find in mapping file. Whether found or not, this will fill this component's SerializableGuid.
-            OnGuidRequested?.Invoke(componentGuid);
+            if (OnGuidRequested != null)
+            {
+                componentGuid.serializableGuid = OnGuidRequested.Invoke(componentGuid);
+            }
+
+            EditorUtility.SetDirty(this);
         }
 #else
         // If our serialized data is invalid, either something went wrong, or we are a new object instantiated at runtime,
@@ -327,75 +326,6 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
     }
 #endif
 
-    void ISerializationCallbackReceiver.OnBeforeSerialize()
-    {
-#if UNITY_EDITOR
-        if (!this || !gameObject)
-        {
-            return;
-        }
-
-        // This lets us detect if we are a prefab instance or a prefab asset.
-        // A prefab asset cannot contain a GUID since it would then be duplicated when instanced.
-        if (IsAssetOnDisk())
-        {
-            transformGuid.serializableGuid = SerializableGuid.Empty;
-            _transformGuidDump = transformGuid;
-
-            // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGuidsDump for reasoning.
-            _componentGuidsDump.Clear();
-            foreach (ComponentGuid componentGuid in componentGuids)
-            {
-                componentGuid.serializableGuid = SerializableGuid.Empty;
-                _componentGuidsDump.Add(componentGuid);
-            }
-        }
-        else
-#endif
-        {
-            _transformGuidDump = transformGuid;
-
-            // Move all ComponentGuids over to the non-serialized dump list. See definition of componentGuidsDump for reasoning.
-            _componentGuidsDump.Clear();
-            foreach (ComponentGuid componentGuid in componentGuids)
-            {
-                _componentGuidsDump.Add(componentGuid);
-            }
-        }
-    }
-
-    // On load, we can go head a restore our system guids for later use
-    void ISerializationCallbackReceiver.OnAfterDeserialize()
-    {
-        // WARNING Ugly Hack:
-        // Unity does not like Undo.isProcessing being called during script compilation/domain reloading. This is the
-        // only way I know to get around this. As I cannot find a function that will reliably detect domain reloading.
-        // During normal serialization work though this runs fine -\__(*_*)__/-
-        try
-        {
-            // After an Undo/Redo, it is possible the [x]Dump variables might be out-of-date, so don't restore.
-            if (Undo.isProcessing)
-            {
-                return;
-            }
-
-            if (_transformGuidDump != null)
-            {
-                transformGuid = _transformGuidDump;
-            }
-
-            if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
-            {
-                componentGuids.Clear();
-                foreach (ComponentGuid componentGuid in _componentGuidsDump)
-                {
-                    componentGuids.Add(componentGuid);
-                }
-            }
-        }
-        catch (UnityException) {}
-    }
-
     private void InitializeGuids()
     {
         if (transformGuid == null)
@@ -416,7 +346,10 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
                 continue;
             }
 
-            ComponentGuid componentGuid = componentGuids.FirstOrDefault(c => c.CachedComponent == component);
+            GlobalObjectId componentGlobalObjectId = GlobalObjectId.GetGlobalObjectIdSlow(component);
+
+            ComponentGuid componentGuid =
+                componentGuids.FirstOrDefault(c => c.GlobalComponentId.Equals(componentGlobalObjectId.ToString()));
             if (componentGuid == null)
             {
                 _componentGuidCandidates.Add(component);
@@ -467,6 +400,29 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
         }
 
         Debug.Log("OnValidate()");
+
+        // Try and restore cached values.
+        // This used to be done in OnAfterDeserialize(), however that function does not work well with Undo/Redo
+        // (will tend to overwrite the undo state with the dump value), so we try to restore in OnValidate() instead.
+        // This way we can check for undo events and not restore dump values if so.
+
+        // if (!Undo.isProcessing) // Cannot be polled in OnAfterDeserialize().
+        // {
+        //     if (_transformGuidDump != null)
+        //     {
+        //         transformGuid = _transformGuidDump;
+        //     }
+        //
+        //     if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
+        //     {
+        //         componentGuids.Clear();
+        //         foreach (ComponentGuid componentGuid in _componentGuidsDump)
+        //         {
+        //             componentGuids.Add(componentGuid);
+        //         }
+        //     }
+        // }
+
         InitializeGuids();
 
         componentGuids.RemoveAll(guid =>
@@ -516,21 +472,22 @@ public class GuidComponent : MonoBehaviour, ISerializationCallbackReceiver
 [Serializable]
 public class ComponentGuid : IEquatable<ComponentGuid>
 {
+    [SerializeField] [HideInInspector]
     public SerializableGuid serializableGuid;
 
     [SerializeField] [HideInInspector]
-    private Component _cachedComponent;
+    private Component cachedComponent;
     public Component CachedComponent
     {
-        get => _cachedComponent;
+        get => cachedComponent;
         internal set
         {
-            if (_cachedComponent == value)
+            if (cachedComponent == value)
             {
                 return;
             }
 
-            _cachedComponent = value;
+            cachedComponent = value;
 #if UNITY_EDITOR
             GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(value);
             // GlobalObjectID.identifierType 2 = Scene Object
@@ -549,18 +506,18 @@ public class ComponentGuid : IEquatable<ComponentGuid>
     }
 
     [SerializeField] [HideInInspector]
-    private GameObject _owningGameObject;
+    private GameObject owningGameObject;
     public GameObject OwningGameObject
     {
-        get => _owningGameObject;
+        get => owningGameObject;
         internal set
         {
-            if (_owningGameObject == value)
+            if (owningGameObject == value)
             {
                 return;
             }
 
-            _owningGameObject = value;
+            owningGameObject = value;
 #if UNITY_EDITOR
             GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(value);
             // GlobalObjectID.identifierType 2 = Scene Object
@@ -580,33 +537,24 @@ public class ComponentGuid : IEquatable<ComponentGuid>
 
 #if UNITY_EDITOR
     [SerializeField] [HideInInspector]
-    private string _globalGameObjectId = string.Empty;
+    private string globalGameObjectId = string.Empty;
     public string GlobalGameObjectId
     {
-        get => _globalGameObjectId;
-        internal set => _globalGameObjectId = value;
+        get => globalGameObjectId;
+        internal set => globalGameObjectId = value;
     }
 
     [SerializeField] [HideInInspector]
-    private string _globalComponentId = string.Empty;
+    private string globalComponentId = string.Empty;
     public string GlobalComponentId
     {
-        get
-        {
-            if (_cachedComponent)
-            {
-                return _globalComponentId;
-            }
-
-            _globalComponentId = string.Empty;
-            return _globalComponentId;
-        }
-        internal set => _globalComponentId = value;
+        get => globalComponentId;
+        internal set => globalComponentId = value;
     }
 
     public bool IsRootComponent()
     {
-        return !string.IsNullOrEmpty(_globalGameObjectId) && string.IsNullOrEmpty(_globalComponentId);
+        return !string.IsNullOrEmpty(globalGameObjectId) && string.IsNullOrEmpty(globalComponentId);
     }
 
     public Type GetOwningType()
@@ -616,18 +564,18 @@ public class ComponentGuid : IEquatable<ComponentGuid>
             return typeof(GameObject);
         }
 
-        return _cachedComponent ? _cachedComponent.GetType() : null;
+        return cachedComponent ? cachedComponent.GetType() : null;
     }
 #endif
 
     public bool IsTypeOrSubclassOf(Type type)
     {
-        return _cachedComponent.GetType() == type || _cachedComponent.GetType().IsSubclassOf(type);
+        return cachedComponent.GetType() == type || cachedComponent.GetType().IsSubclassOf(type);
     }
 
     public bool IsTypeOrSubclassOf<T>() where T : Component
     {
-        return _cachedComponent.GetType() == typeof(T) || _cachedComponent.GetType().IsSubclassOf(typeof(T));
+        return cachedComponent.GetType() == typeof(T) || cachedComponent.GetType().IsSubclassOf(typeof(T));
     }
 
     public bool Equals(ComponentGuid other)
