@@ -127,31 +127,15 @@ public class GuidManagerEditor
         }
     }
 
-    public static bool AdoptGuid(Component component, SerializableGuid guid)
+    public static void AdoptGuid(OrphanedGuidItemInfo orphanedGuidItemInfo, ComponentGuid componentGuid)
     {
-        GlobalObjectId gameObjectKey = GlobalObjectId.GetGlobalObjectIdSlow(component.gameObject);
-        GlobalObjectId componentKey = GlobalObjectId.GetGlobalObjectIdSlow(component.gameObject);
-        // GlobalObjectID.identifierType 2 = Scene Object
-        if (gameObjectKey.identifierType != 2)
+        if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId) ||
+            orphanedGuidItemInfo.GuidItem.ownerType.Type != componentGuid.CachedComponent.GetType())
         {
-            return false;
+            return;
         }
 
-        // if (GetOrCreateMappings().TryGet(gameObjectKey, null, out GuidReferenceMappings.GuidRecord guidRecord, out _))
-        // {
-        //     foreach (GuidReferenceMappings.GuidItem guidItem in guidRecord.componentGuids)
-        //     {
-        //         if (guidItem.guid == guid && guidItem.state == GuidReferenceMappings.GuidState.Orphaned)
-        //         {
-        //             guidItem.globalObjectID = componentKey.ToString();
-        //             guidItem.state = GuidReferenceMappings.GuidState.Owned;
-        //
-        //             return true;
-        //         }
-        //     }
-        // }
-
-        return false;
+        GetOrCreateMappings().AdoptGuid(orphanedGuidItemInfo, componentGuid.GlobalComponentId);
     }
 
     static GuidManagerEditor()

@@ -124,9 +124,28 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
 
     public void SetState(GuidItem item, GuidState state)
     {
-        Undo.RecordObject(this, "Orphaned GUID Mapping");
+        Undo.RecordObject(this, $"Setting GUID state to {state.ToString()}");
         item.state = state;
         EditorUtility.SetDirty(this);
+    }
+
+    internal void AdoptGuid(OrphanedGuidItemInfo itemInfo, string componentGlobalObjectId)
+    {
+        Undo.RecordObject(this, "Adopting Guid");
+        itemInfo.GuidItem.state = GuidState.Owned;
+        itemInfo.GuidItem.globalObjectID = componentGlobalObjectId;
+
+        if (_map.TryGetValue(itemInfo.TransformGuid.globalObjectID, out GuidRecord guidRecord))
+        {
+            if (guidRecord.componentGuids.TryGetValue(itemInfo.GuidItem.globalObjectID, out GuidItem guidItem) &&
+                guidItem.state == GuidState.Orphaned)
+            {
+                guidRecord.componentGuids.Remove(itemInfo.GuidItem.globalObjectID);
+                guidRecord.componentGuids.Add(componentGlobalObjectId, itemInfo.GuidItem);
+
+                EditorUtility.SetDirty(this);
+            }
+        }
     }
 
     public void Remove(GuidRecordQuery query)
