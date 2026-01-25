@@ -160,6 +160,11 @@ public class GuidComponentDrawer : Editor
         var elements = new List<(VisualElement element, int index)>();
         foreach (ComponentGuid componentGuid in _guidComp.GetComponentGuids())
         {
+            if (!componentGuid.CachedComponent)
+            {
+                continue;
+            }
+
             VisualElement element = new VisualElement
             {
                 style = { flexDirection = FlexDirection.Row }
@@ -320,7 +325,28 @@ public class GuidComponentDrawer : Editor
             SetupComponentPicker(objectFieldOrphanedGuid);
 
             objectFieldOrphanedGuid.name = "error-guid-orphaned-object-field";
-            objectFieldOrphanedGuid.RegisterValueChangedCallback(evt => {});
+            objectFieldOrphanedGuid.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue && evt.newValue is Component component)
+                {
+                    Undo.RecordObject(_guidComp, "Adopting Guid");
+                    ComponentGuid componentGuid = new ComponentGuid
+                    {
+                        CachedComponent = component,
+                        OwningGameObject = _guidComp.gameObject
+                    };
+
+                    _guidComp.componentGuids.Add(componentGuid);
+                    GuidManagerEditor.AdoptGuid(orphanedGuid, componentGuid);
+
+                    _guidComp.OnValidate();
+                    serializedObject.Update();
+
+                    EditorUtility.SetDirty(_guidComp);
+
+                    RebuildGuidList(_componentGUIDsContainer);
+                }
+            });
 
             objectFieldOrphanedGuid.RegisterCallback<DragUpdatedEvent>(evt =>
             {
@@ -427,7 +453,7 @@ public class GuidComponentDrawer : Editor
         }
 
         int index = 0;
-        foreach (Component component in _guidComp.gameObject.GetComponents<Component>())
+        foreach (Component component in _guidComp.GetComponentGuidCandidates())
         {
             if (GuidComponentExcluders.Excluders.Contains(component.GetType()))
             {
