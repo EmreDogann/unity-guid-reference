@@ -26,6 +26,12 @@ TextField > #unity-text-input:hover {
     color: var(--unity-colors-button-text);
 }
 
+.guid-component__guid-text-field {
+    /* This is a hack required to force the text value field to correctly recalculate alignment when the inspector width is too small.
+    Otherwise, it seems the layout values are cached and it doesn't update on resize. */
+    width: 0;
+}
+
 #guid-component-icon {
     flex: 0 0 auto;
     width: 16px;
@@ -57,12 +63,15 @@ TextField > #unity-text-input:hover {
     height: 16px;
     align-self: center;
 
+    /* Overlay Remove button on-top of text field value. */
+    position: absolute;
+    right: 1px;
+
     margin: 0;
     padding: 0;
 
     border-width: 0;
-    border-bottom-left-radius: 0;
-    border-top-left-radius: 0;
+    border-radius: 0;
     border-color: var(--unity-colors-object_field-border);
 
     -unity-background-scale-mode: scale-to-fit;
@@ -88,11 +97,13 @@ TextField > #unity-text-input:hover {
 
 #error-guid-orphaned-field {
     margin-bottom: 0;
+    margin-top: 0;
     padding-top: 0;
     padding-bottom: 0;
+    padding-right: 15px;
 }
 
-#error-guid-orphaned-label {
+#error-guid-orphaned-label, #error-guid-orphaned-label > TextInput {
     margin: 0;
 }
 
@@ -103,5 +114,6 @@ TextField > #unity-text-input:hover {
 
 #error-guid-orphaned-object-field {
     margin: 0;
-    min-width: 150px;
+    flex-grow: 1;
+    flex-basis: 0;
 }
