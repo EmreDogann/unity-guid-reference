@@ -346,7 +346,7 @@ public class GuidComponentDrawer : Editor
                     };
 
                     _guidComp.componentGuids.Add(componentGuid);
-                    GuidManagerEditor.AdoptGuid(orphanedGuid, componentGuid);
+                    GuidManagerEditor.AdoptGuid(orphanedGuid.GuidItem, componentGuid);
 
                     _guidComp.OnValidate();
                     serializedObject.Update();

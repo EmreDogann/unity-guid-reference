@@ -34,15 +34,16 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
     {
         public GuidItem transformGuid;
         public SerializableDictionary<string, GuidItem> componentGuids;
+        public SerializableDictionary<SerializableGuid, GuidItem> orphanedGuids;
     }
 
     public readonly struct GuidRecordQuery
     {
         public readonly string TransformKey;
         public readonly string ComponentKey;
-        public readonly Guid ComponentGuid;
+        public readonly SerializableGuid ComponentGuid;
 
-        public GuidRecordQuery(string transformKey, string componentKey = "", Guid componentGuid = default)
+        public GuidRecordQuery(string transformKey, string componentKey = "", SerializableGuid componentGuid = default)
         {
             TransformKey = transformKey;
             ComponentKey = componentKey;
@@ -67,6 +68,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         }
     }
 
+    private static readonly string OrphanedGuidObjectId = new GlobalObjectId().ToString();
     private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
     private static string AssetPathKey => $"{Application.dataPath}_GuidReferenceMappingsPath";
     private readonly Dictionary<string, GuidRecord> _map = new Dictionary<string, GuidRecord>();
@@ -104,11 +106,11 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                 }
             }
         }
-        else if (query.ComponentGuid != Guid.Empty)
+        else if (query.ComponentGuid != SerializableGuid.Empty)
         {
             foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
             {
-                if (componentGuid.guid.Guid == query.ComponentGuid)
+                if (componentGuid.guid == query.ComponentGuid)
                 {
                     guidRecord.componentGuids[componentGuid.globalObjectID] = guidItem;
                     EditorUtility.SetDirty(this);
@@ -129,26 +131,68 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         EditorUtility.SetDirty(this);
     }
 
-    internal void AdoptGuid(OrphanedGuidItemInfo itemInfo, string componentGlobalObjectId)
+    public void OrphanGuid(string transformGuidId, GuidItem item = null)
+    {
+        if (transformGuidId == OrphanedGuidObjectId)
+        {
+            return;
+        }
+
+        Undo.RecordObject(this, "Orphaning Guid");
+
+        if (_map.TryGetValue(transformGuidId, out GuidRecord guidRecord))
+        {
+            if (item != null)
+            {
+                if (guidRecord.componentGuids.TryGetValue(item.globalObjectID, out GuidItem guidItem) &&
+                    guidItem.state == GuidState.Owned)
+                {
+                    guidRecord.componentGuids.Remove(item.globalObjectID);
+
+                    item.state = GuidState.Orphaned;
+                    item.globalObjectID = OrphanedGuidObjectId;
+                    guidRecord.orphanedGuids.TryAdd(item.guid, item);
+
+                    EditorUtility.SetDirty(this);
+                }
+            }
+            else
+            {
+                guidRecord.transformGuid.state = GuidState.Orphaned;
+            }
+        }
+    }
+
+    internal void AdoptGuid(GuidItem guidItem, string transformGlobalObjectId, string componentGlobalObjectId)
     {
         Undo.RecordObject(this, "Adopting Guid");
-        itemInfo.GuidItem.state = GuidState.Owned;
-        itemInfo.GuidItem.globalObjectID = componentGlobalObjectId;
 
-        if (_map.TryGetValue(itemInfo.TransformGuid.globalObjectID, out GuidRecord guidRecord))
+        if (_map.TryGetValue(transformGlobalObjectId, out GuidRecord guidRecord))
         {
-            if (guidRecord.componentGuids.TryGetValue(itemInfo.GuidItem.globalObjectID, out GuidItem guidItem) &&
+            // if ()
+            // {
+            //     guidItem.state = GuidState.Owned;
+            //     guidItem.globalObjectID = componentGlobalObjectId;
+            //     guidRecord.componentGuids.Add(componentGlobalObjectId, itemInfo.GuidItem);
+            //     GuidRecordQuery query = new GuidRecordQuery(transformGlobalObjectId, componentGlobalObjectId);
+            //     Add(query, );
+            // }
+
+            if (guidRecord.orphanedGuids.TryGetValue(guidItem.guid, out GuidItem item) &&
                 guidItem.state == GuidState.Orphaned)
             {
-                guidRecord.componentGuids.Remove(itemInfo.GuidItem.globalObjectID);
-                guidRecord.componentGuids.Add(componentGlobalObjectId, itemInfo.GuidItem);
+                guidItem.state = GuidState.Owned;
+                guidItem.globalObjectID = componentGlobalObjectId;
+
+                guidRecord.orphanedGuids.Remove(guidItem.globalObjectID);
+                guidRecord.componentGuids.Add(componentGlobalObjectId, guidItem);
 
                 EditorUtility.SetDirty(this);
             }
         }
     }
 
-    public void Remove(GuidRecordQuery query)
+    public void Remove(GuidRecordQuery query, bool isOrphaned)
     {
         if (!query.IsTransformKeyValid())
         {
@@ -161,22 +205,48 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
             Undo.RecordObject(this, "Remove GUID Mapping");
             if (query.IsComponentKeyValid())
             {
-                if (guidRecord.componentGuids.TryGetValue(query.ComponentKey, out GuidItem guidItem))
+                if (isOrphaned)
                 {
-                    guidRecord.componentGuids.Remove(guidItem.globalObjectID);
-                    EditorUtility.SetDirty(this);
-                    return;
+                    if (guidRecord.orphanedGuids.TryGetValue(query.ComponentGuid, out GuidItem guidItem))
+                    {
+                        guidRecord.orphanedGuids.Remove(guidItem.guid);
+                        EditorUtility.SetDirty(this);
+                        return;
+                    }
+                }
+                else
+                {
+                    if (guidRecord.componentGuids.TryGetValue(query.ComponentKey, out GuidItem guidItem))
+                    {
+                        guidRecord.componentGuids.Remove(guidItem.globalObjectID);
+                        EditorUtility.SetDirty(this);
+                        return;
+                    }
                 }
             }
 
-            if (query.ComponentGuid != Guid.Empty)
+            if (query.ComponentGuid != SerializableGuid.Empty)
             {
-                foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
+                if (isOrphaned)
                 {
-                    if (componentGuid.guid.Guid == query.ComponentGuid)
+                    foreach (GuidItem orphanedGuid in guidRecord.orphanedGuids.Values)
                     {
-                        guidRecord.componentGuids.Remove(componentGuid.globalObjectID);
-                        EditorUtility.SetDirty(this);
+                        if (orphanedGuid.guid == query.ComponentGuid)
+                        {
+                            guidRecord.componentGuids.Remove(orphanedGuid.guid);
+                            EditorUtility.SetDirty(this);
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
+                    {
+                        if (componentGuid.guid == query.ComponentGuid)
+                        {
+                            guidRecord.componentGuids.Remove(componentGuid.globalObjectID);
+                            EditorUtility.SetDirty(this);
+                        }
                     }
                 }
 
@@ -221,11 +291,11 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                 return guidRecord.componentGuids.TryGetValue(query.ComponentKey, out guidItem);
             }
 
-            if (query.ComponentGuid != Guid.Empty)
+            if (query.ComponentGuid != SerializableGuid.Empty)
             {
                 foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
                 {
-                    if (componentGuid.guid.Guid == query.ComponentGuid)
+                    if (componentGuid.guid == query.ComponentGuid)
                     {
                         guidItem = componentGuid;
                         return true;
