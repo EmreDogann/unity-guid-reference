@@ -82,7 +82,7 @@ public class GuidComponentDrawer : Editor
                 }
             };
             textField.AddToClassList(TextField.alignedFieldUssClassName);
-            textField.AddToClassList(".guid-component__guid-text-field");
+            textField.AddToClassList("guid-component__guid-text-field");
             textField.SetValueWithoutNotify(_guidComp.transformGuid.serializableGuid.ToString());
 
             Image icon = new Image { image = EditorGUIUtility.ObjectContent(null, typeof(GameObject)).image };
@@ -171,13 +171,13 @@ public class GuidComponentDrawer : Editor
                 new TextField($"{ObjectNames.NicifyVariableName(componentGuid.CachedComponent.GetType().Name)}");
 #endif
 
+            labelFieldComponentGuid.isDelayed = true;
             labelFieldComponentGuid.isReadOnly = true;
             labelFieldComponentGuid.style.flexGrow = 1;
-            labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
-            labelFieldComponentGuid.SetValueWithoutNotify(componentGuid.serializableGuid.ToString());
 
-            labelFieldComponentGuid.labelElement.RegisterCallback<GeometryChangedEvent>(evt =>
-                labelFieldComponentGuid.labelElement.MarkDirtyRepaint());
+            labelFieldComponentGuid.AddToClassList(TextField.alignedFieldUssClassName);
+            labelFieldComponentGuid.AddToClassList("guid-component__guid-text-field");
+            labelFieldComponentGuid.SetValueWithoutNotify(componentGuid.serializableGuid.ToString());
 
             Image icon = new Image
             {
@@ -208,7 +208,7 @@ public class GuidComponentDrawer : Editor
 
                 RebuildGuidList(_componentGUIDsContainer);
             };
-            labelFieldComponentGuid[1].Add(button);
+            labelFieldComponentGuid.contentContainer.Add(button);
 
             element.Add(icon);
             element.Add(labelFieldComponentGuid);
@@ -344,6 +344,7 @@ public class GuidComponentDrawer : Editor
             };
             labelFieldComponentGuid.name = "error-guid-orphaned-label";
             labelFieldComponentGuid.value = orphanedGuid.GuidItem.guid.ToString();
+            labelFieldComponentGuid.AddToClassList("guid-component__guid-text-field");
 
             // Ugly hack so the label section is aligned, if label is empty it won't call the align functions.
             CustomLabelField customField = new CustomLabelField(" ");
@@ -372,7 +373,7 @@ public class GuidComponentDrawer : Editor
 
                 RebuildGuidList(_componentGUIDsContainer);
             };
-            labelFieldComponentGuid[0].Add(button);
+            labelFieldComponentGuid.contentContainer.Add(button);
 
             Image icon = new Image { image = EditorGUIUtility.IconContent("Error").image };
             icon.name = "guid-component-icon";
