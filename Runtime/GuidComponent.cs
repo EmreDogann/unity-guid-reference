@@ -209,7 +209,7 @@ public class GuidComponent : MonoBehaviour
     /// <summary>
     ///     Same as <see cref="GetGuid(Type)" />.
     /// </summary>
-    /// <param name="component">The component which you want to find the SerializableGuid of.</param>
+    /// <param name="component">The component which you want to find the guid of.</param>
     public Guid GetGuid(Component component)
     {
         if (component is GuidComponent)
@@ -227,9 +227,9 @@ public class GuidComponent : MonoBehaviour
     }
 
     /// <summary>
-    ///     Tried to get the component from a given SerializableGuid.
+    ///     Tried to get the component from a given guid.
     /// </summary>
-    /// <param name="guid">The SerializableGuid of the component to find.</param>
+    /// <param name="guid">The guid of the component to find.</param>
     /// <returns>If found, returns the Component, otherwise null.</returns>
     public Component GetComponentFromGuid(Guid guid)
     {
@@ -248,7 +248,7 @@ public class GuidComponent : MonoBehaviour
     #endregion
 
     // When de-serializing or creating this GuidComponent, we want to either restore our serialized GUID or create a new one.
-    // If the SerializableGuid already exists and is valid, then this function will just register the SerializableGuid with the GuidManager.
+    // If the guid already exists and is valid, then this function will just register the guid with the GuidManager.
     private void FindOrCreateGuid(ComponentGuid componentGuid)
     {
 #if UNITY_EDITOR
@@ -261,8 +261,8 @@ public class GuidComponent : MonoBehaviour
         {
             Undo.RecordObject(this, "Restoring Component Guid");
             Debug.Log(
-                $"Requesting mapped or new {(componentGuid.CachedComponent ? componentGuid.CachedComponent.GetType() + " " : "")}SerializableGuid...");
-            // If we don't have a cached SerializableGuid, then try find in mapping file. Whether found or not, this will fill this component's SerializableGuid.
+                $"Requesting mapped or new {(componentGuid.CachedComponent ? componentGuid.CachedComponent.GetType() + " " : "")}Guid...");
+            // If we don't have a cached guid, then try find in mapping file. Whether found or not, this will fill this component's guid.
             if (OnGuidRequested != null)
             {
                 componentGuid.serializableGuid = OnGuidRequested.Invoke(componentGuid);
