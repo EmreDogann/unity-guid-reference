@@ -310,7 +310,7 @@ public class GuidComponentDrawer : Editor
             parent.Add(separator);
         }
 
-        foreach (GuidReferenceMappings.OrphanedGuidItemInfo orphanedGuid in orphanedList)
+        foreach (GuidMappings.OrphanedGuidItemInfo orphanedGuid in orphanedList)
         {
             string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this guid.";
             VisualElement element = new VisualElement
@@ -409,7 +409,7 @@ public class GuidComponentDrawer : Editor
     }
 
     private void SetupComponentPicker(ObjectField objectField,
-        GuidReferenceMappings.OrphanedGuidItemInfo orphanedGuidInfo)
+        GuidMappings.OrphanedGuidItemInfo orphanedGuidInfo)
     {
         SearchProvider searchProvider = new SearchProvider("local_components", "Local Components")
         {
@@ -445,14 +445,14 @@ public class GuidComponentDrawer : Editor
 
     private class ObjectSearchPayload
     {
-        public GuidReferenceMappings.OrphanedGuidItemInfo OrphanedGuidInfo;
+        public GuidMappings.OrphanedGuidItemInfo OrphanedGuidInfo;
         public Component Component;
         public ObjectField ObjectField;
     }
 
     private IEnumerable<SearchItem> ComponentPickerFetchItemsHandler(SearchContext searchContext,
         SearchProvider searchProvider, ObjectField objectField,
-        GuidReferenceMappings.OrphanedGuidItemInfo orphanedGuidInfo)
+        GuidMappings.OrphanedGuidItemInfo orphanedGuidInfo)
     {
         if (_guidComp.gameObject == null)
         {

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Sherbert.Framework.Generic;
 using UnityEditor;
 using UnityEngine;
 
-public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackReceiver
+[FilePath("Assets/GuidReferences/Mappings.txt", FilePathAttribute.Location.ProjectFolder)]
+public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCallbackReceiver
 {
     public enum GuidState
     {
@@ -69,12 +69,21 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
     }
 
     private static readonly string OrphanedGuidObjectId = new GlobalObjectId().ToString();
-    private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
-    private static string AssetPathKey => $"{Application.dataPath}_GuidReferenceMappingsPath";
+    // private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
+    // private static string AssetPathKey => $"{Application.dataPath}_GuidReferenceMappingsPath";
     private readonly Dictionary<string, GuidRecord> _map = new Dictionary<string, GuidRecord>();
 
     [SerializeField] private List<string> keys = new List<string>();
     [SerializeField] private List<GuidRecord> values = new List<GuidRecord>();
+
+    protected override void Save(bool saveAsText)
+    {
+        // Only save state in edit mode.
+        if (!EditorApplication.isPlaying)
+        {
+            base.Save(saveAsText);
+        }
+    }
 
     public void Add(GuidRecordQuery query, GuidItem guidItem, bool overwriteIfExists = false)
     {
@@ -96,12 +105,14 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
             if (overwriteIfExists)
             {
                 guidRecord.componentGuids[query.ComponentKey] = guidItem;
+                Save(true);
                 EditorUtility.SetDirty(this);
             }
             else
             {
                 if (guidRecord.componentGuids.TryAdd(query.ComponentKey, guidItem))
                 {
+                    Save(true);
                     EditorUtility.SetDirty(this);
                 }
             }
@@ -113,6 +124,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                 if (componentGuid.guid == query.ComponentGuid)
                 {
                     guidRecord.componentGuids[componentGuid.globalObjectID] = guidItem;
+                    Save(true);
                     EditorUtility.SetDirty(this);
                 }
             }
@@ -120,6 +132,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         else
         {
             guidRecord.transformGuid = guidItem;
+            Save(true);
             EditorUtility.SetDirty(this);
         }
     }
@@ -128,6 +141,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
     {
         Undo.RecordObject(this, $"Setting GUID state to {state.ToString()}");
         item.state = state;
+
+        Save(true);
         EditorUtility.SetDirty(this);
     }
 
@@ -153,6 +168,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                     item.globalObjectID = OrphanedGuidObjectId;
                     guidRecord.orphanedGuids.TryAdd(item.guid, item);
 
+                    Save(true);
                     EditorUtility.SetDirty(this);
                 }
             }
@@ -177,6 +193,7 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                 guidRecord.orphanedGuids.Remove(guidItem.guid);
                 guidRecord.componentGuids.Add(componentGlobalObjectId, guidItem);
 
+                Save(true);
                 EditorUtility.SetDirty(this);
 
                 return true;
@@ -204,6 +221,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                     if (guidRecord.orphanedGuids.TryGetValue(query.ComponentGuid, out GuidItem guidItem))
                     {
                         guidRecord.orphanedGuids.Remove(guidItem.guid);
+
+                        Save(true);
                         EditorUtility.SetDirty(this);
                         return;
                     }
@@ -213,6 +232,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                     if (guidRecord.componentGuids.TryGetValue(query.ComponentKey, out GuidItem guidItem))
                     {
                         guidRecord.componentGuids.Remove(guidItem.globalObjectID);
+
+                        Save(true);
                         EditorUtility.SetDirty(this);
                         return;
                     }
@@ -228,6 +249,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                         if (orphanedGuid.guid == query.ComponentGuid)
                         {
                             guidRecord.componentGuids.Remove(orphanedGuid.guid);
+
+                            Save(true);
                             EditorUtility.SetDirty(this);
                         }
                     }
@@ -239,6 +262,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
                         if (componentGuid.guid == query.ComponentGuid)
                         {
                             guidRecord.componentGuids.Remove(componentGuid.globalObjectID);
+
+                            Save(true);
                             EditorUtility.SetDirty(this);
                         }
                     }
@@ -248,6 +273,8 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
             }
 
             _map.Remove(guidRecord.transformGuid.globalObjectID);
+
+            Save(true);
             EditorUtility.SetDirty(this);
         }
     }
@@ -329,46 +356,82 @@ public class GuidReferenceMappings : ScriptableObject, ISerializationCallbackRec
         }
     }
 
-    internal static GuidReferenceMappings GetOrCreate()
+    internal void Initialize()
     {
-        if (TryLoadAsset(out GuidReferenceMappings settings))
-        {
-            return settings;
-        }
+        InitializeSingleton();
 
-        settings = CreateInstance<GuidReferenceMappings>();
-        AssetDatabase.CreateAsset(settings, DefaultAssetPath);
-        AssetDatabase.SaveAssets();
+        Undo.undoRedoPerformed -= UndoRedoPerformed;
+        Undo.undoRedoPerformed += UndoRedoPerformed;
 
-        return settings;
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
     }
 
-    internal static bool TryLoadAsset(out GuidReferenceMappings settings)
+    private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
     {
-        string assetPath = EditorPrefs.GetString(AssetPathKey, DefaultAssetPath);
-        // try to load at the saved or default path
-        settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
-        if (settings != null)
+        switch (stateChange)
         {
-            return true;
+            case PlayModeStateChange.EnteredEditMode:
+                ReloadInPlace();
+                break;
+            case PlayModeStateChange.ExitingEditMode:
+                break;
+            case PlayModeStateChange.EnteredPlayMode:
+                break;
+            case PlayModeStateChange.ExitingPlayMode:
+                Debug.Log("Exiting Playmode");
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(stateChange), stateChange, null);
         }
-
-        // if no asset at path try to find it in project's assets
-        string assetGuid = AssetDatabase.FindAssets($"t:{typeof(GuidReferenceMappings)}").FirstOrDefault();
-        if (string.IsNullOrEmpty(assetGuid))
-        {
-            return false;
-        }
-
-        assetPath = AssetDatabase.GUIDToAssetPath(assetGuid);
-        settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
-
-        if (settings == null)
-        {
-            return false;
-        }
-
-        EditorPrefs.SetString(AssetPathKey, assetPath);
-        return true;
     }
+
+    private void UndoRedoPerformed()
+    {
+        Save(true);
+    }
+
+    // internal static GuidMappings GetOrCreate()
+    // {
+    //     if (TryLoadAsset(out GuidReferenceMappings settings))
+    //     {
+    //         return settings;
+    //     }
+    //
+    //     settings = CreateInstance<GuidReferenceMappings>();
+    //     AssetDatabase.CreateAsset(settings, DefaultAssetPath);
+    //     AssetDatabase.SaveAssets();
+    //
+    //     return settings;
+    // }
+
+    // internal static bool TryLoadAsset(out GuidReferenceMappings settings)
+    // {
+    //     string assetPath = EditorPrefs.GetString(AssetPathKey, DefaultAssetPath);
+    //     // try to load at the saved or default path
+    //     settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
+    //     if (settings != null)
+    //     {
+    //         return true;
+    //     }
+    //
+    //     // if no asset at path try to find it in project's assets
+    //     string assetGuid = AssetDatabase.FindAssets($"t:{typeof(GuidReferenceMappings)}").FirstOrDefault();
+    //     if (string.IsNullOrEmpty(assetGuid))
+    //     {
+    //         return false;
+    //     }
+    //
+    //     assetPath = AssetDatabase.GUIDToAssetPath(assetGuid);
+    //     settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
+    //
+    //     if (settings == null)
+    //     {
+    //         return false;
+    //     }
+    //
+    //     EditorPrefs.SetString(AssetPathKey, assetPath);
+    //     return true;
+    // }
 }
