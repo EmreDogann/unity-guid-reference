@@ -44,7 +44,7 @@ public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObjec
         string filePath = GetFilePath();
         if (!string.IsNullOrEmpty(filePath))
         {
-            InternalEditorUtility.LoadSerializedFileAndForget(filePath);
+            s_Instance = InternalEditorUtility.LoadSerializedFileAndForget(filePath) as T;
         }
 
         if (s_Instance != null)
@@ -61,7 +61,7 @@ public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObjec
         if (!string.IsNullOrEmpty(filePath))
         {
             var loadedObject = InternalEditorUtility.LoadSerializedFileAndForget(filePath);
-            if (loadedObject != null && loadedObject[0] != null)
+            if (loadedObject.Length > 0 && loadedObject[0] != null)
             {
                 EditorUtility.CopySerialized(loadedObject[0], s_Instance);
                 DestroyImmediate(loadedObject[0], false);

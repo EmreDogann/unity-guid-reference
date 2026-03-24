@@ -4,7 +4,7 @@ using Sherbert.Framework.Generic;
 using UnityEditor;
 using UnityEngine;
 
-[FilePath("Assets/GuidReferences/Mappings.txt", FilePathAttribute.Location.ProjectFolder)]
+[FilePath("Assets/GuidReferences/Guid.mappings", FilePathAttribute.Location.ProjectFolder)]
 public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCallbackReceiver
 {
     public enum GuidState
