@@ -345,6 +345,32 @@ public class GuidComponentDrawer : Editor
                 }
             }, TrickleDown.TrickleDown);
 
+            objectFieldOrphanedGuid.RegisterCallback<DragPerformEvent>(evt =>
+            {
+                Component draggedObject = DragAndDrop.objectReferences[0] as Component;
+                if (draggedObject && IsChildOf(draggedObject.gameObject, _guidComp.gameObject) &&
+                    draggedObject.GetType() == orphanedGuid.GuidItem.ownerType.Type)
+                {
+                    Undo.RecordObject(_guidComp, "Adopting Guid");
+                    ComponentGuid componentGuid = new ComponentGuid
+                    {
+                        CachedComponent = draggedObject,
+                        OwningGameObject = _guidComp.gameObject
+                    };
+
+                    if (GuidManagerEditor.AdoptGuid(orphanedGuid.GuidItem, componentGuid))
+                    {
+                        componentGuid.serializableGuid = orphanedGuid.GuidItem.guid;
+                        _guidComp.componentGuids.Add(componentGuid);
+                    }
+
+                    serializedObject.Update();
+                    EditorUtility.SetDirty(_guidComp);
+
+                    evt.StopImmediatePropagation();
+                }
+            }, TrickleDown.TrickleDown);
+
             // Override the object selector with our custom one.
             VisualElement oldObjectSelector = objectFieldOrphanedGuid.Q(null, ObjectField.selectorUssClassName);
             VisualElement objectSelector = new VisualElement();
