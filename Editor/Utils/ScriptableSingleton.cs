@@ -44,15 +44,16 @@ public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObjec
         string filePath = GetFilePath();
         if (!string.IsNullOrEmpty(filePath))
         {
-            s_Instance = InternalEditorUtility.LoadSerializedFileAndForget(filePath) as T;
+            var loadedObjects = InternalEditorUtility.LoadSerializedFileAndForget(filePath);
+            if (loadedObjects.Length > 0 && loadedObjects[0] != null)
+            {
+                s_Instance = loadedObjects[0] as T;
+                return;
+            }
         }
 
-        if (s_Instance != null)
-        {
-            return;
-        }
-
-        CreateInstance<T>().hideFlags = HideFlags.DontSave | HideFlags.HideInHierarchy;
+        s_Instance = CreateInstance<T>();
+        s_Instance.hideFlags = HideFlags.DontSave | HideFlags.HideInHierarchy;
     }
 
     protected static void ReloadInPlace()
@@ -60,11 +61,11 @@ public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObjec
         string filePath = GetFilePath();
         if (!string.IsNullOrEmpty(filePath))
         {
-            var loadedObject = InternalEditorUtility.LoadSerializedFileAndForget(filePath);
-            if (loadedObject.Length > 0 && loadedObject[0] != null)
+            var loadedObjects = InternalEditorUtility.LoadSerializedFileAndForget(filePath);
+            if (loadedObjects.Length > 0 && loadedObjects[0] != null)
             {
-                EditorUtility.CopySerialized(loadedObject[0], s_Instance);
-                DestroyImmediate(loadedObject[0], false);
+                EditorUtility.CopySerialized(loadedObjects[0], s_Instance);
+                DestroyImmediate(loadedObjects[0], false);
             }
         }
     }
