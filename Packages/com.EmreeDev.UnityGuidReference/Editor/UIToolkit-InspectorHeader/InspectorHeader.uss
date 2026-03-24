@@ -42,7 +42,6 @@
 
 .uitk-inspector__header-label {
     flex: 1 1 auto;
-    padding-bottom: 1px;
     -unity-font-style: bold;
 }
 
