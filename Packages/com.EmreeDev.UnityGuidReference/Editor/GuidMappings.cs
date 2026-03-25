@@ -7,6 +7,32 @@ using UnityEngine;
 
 public class GuidMappings : ScriptableObject
 {
+    private static GuidMappings s_Instance;
+    public static GuidMappings Instance
+    {
+        get
+        {
+            if (s_Instance == null)
+            {
+                LoadOrCreate();
+            }
+
+            return s_Instance;
+        }
+    }
+
+    protected GuidMappings()
+    {
+        if (s_Instance != null)
+        {
+            Debug.LogError("GuidMappings already exists. Did you query the singleton in a constructor?");
+        }
+        else
+        {
+            s_Instance = this;
+        }
+    }
+
     [Serializable]
     public class GuidItem
     {
@@ -333,35 +359,35 @@ public class GuidMappings : ScriptableObject
         Save();
     }
 
-    internal static GuidMappings GetOrCreate()
+    internal static GuidMappings LoadOrCreate()
     {
-        if (TryLoadAsset(out GuidMappings settings))
+        GuidMappings settings = CreateInstance<GuidMappings>();
+        settings.hideFlags = HideFlags.HideAndDontSave;
+        if (TryLoadAsset(settings))
         {
             return settings;
         }
 
-        settings = CreateInstance<GuidMappings>();
         settings.Initialize();
         SaveToJson(settings, AssetPath);
 
         return settings;
     }
 
-    internal static bool TryLoadAsset(out GuidMappings settings)
+    internal static bool TryLoadAsset(GuidMappings settings)
     {
-        settings = null;
         if (File.Exists(AssetPath))
         {
-            settings = LoadFromJson<GuidMappings>(AssetPath);
+            LoadFromJson(AssetPath, settings);
         }
 
         return settings != null;
     }
 
-    private static T LoadFromJson<T>(string path) where T : ScriptableObject
+    private static void LoadFromJson<T>(string path, T objectInstance) where T : ScriptableObject
     {
         string json = File.ReadAllText(path);
-        return JsonUtility.FromJson<T>(json);
+        JsonUtility.FromJsonOverwrite(json, objectInstance);
     }
 
     private static void SaveToJson(ScriptableObject obj, string path)
