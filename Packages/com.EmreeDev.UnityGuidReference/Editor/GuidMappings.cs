@@ -1,40 +1,33 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Sherbert.Framework.Generic;
 using UnityEditor;
 using UnityEngine;
 
-[FilePath("Assets/GuidReferences/Guid.mappings", FilePathAttribute.Location.ProjectFolder)]
-public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCallbackReceiver
+public class GuidMappings : ScriptableObject
 {
-    public enum GuidState
-    {
-        None,
-        Owned,
-        Orphaned
-    }
-
     [Serializable]
     public class GuidItem
     {
-        public GuidState state;
-        public SerializableType ownerType;
         public string globalObjectID;
+        public SerializedType ownerType;
         public SerializableGuid guid;
     }
 
     public class OrphanedGuidItemInfo
     {
-        public GuidItem TransformGuid;
+        public string TransformKey;
         public GuidItem GuidItem;
     }
 
     [Serializable]
     public class GuidRecord
     {
+        public bool transformOrphaned;
         public GuidItem transformGuid;
-        public SerializableDictionary<string, GuidItem> componentGuids;
-        public SerializableDictionary<SerializableGuid, GuidItem> orphanedGuids;
+        public List<GuidItem> assignedGuids = new List<GuidItem>();
+        public List<GuidItem> orphanedGuids = new List<GuidItem>();
     }
 
     public readonly struct GuidRecordQuery
@@ -69,21 +62,22 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
     }
 
     private static readonly string OrphanedGuidObjectId = new GlobalObjectId().ToString();
-    // private const string DefaultAssetPath = "Assets/GuidReferenceMappings.asset";
-    // private static string AssetPathKey => $"{Application.dataPath}_GuidReferenceMappingsPath";
-    private readonly Dictionary<string, GuidRecord> _map = new Dictionary<string, GuidRecord>();
+    private static string _path;
 
-    [SerializeField] private List<string> keys = new List<string>();
-    [SerializeField] private List<GuidRecord> values = new List<GuidRecord>();
-
-    protected override void Save(bool saveAsText)
+    public static string AssetPath
     {
-        // Only save state in edit mode.
-        if (!EditorApplication.isPlaying)
+        get
         {
-            base.Save(saveAsText);
+            if (_path == null)
+            {
+                _path = Path.Combine(Application.persistentDataPath, "GuidMappings.json");
+            }
+
+            return _path;
         }
     }
+    [SerializeField]
+    private SerializableDictionary<string, GuidRecord> _map = new SerializableDictionary<string, GuidRecord>();
 
     public void Add(GuidRecordQuery query, GuidItem guidItem, bool overwriteIfExists = false)
     {
@@ -96,7 +90,7 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
 
         if (!_map.TryGetValue(query.TransformKey, out GuidRecord guidRecord))
         {
-            guidRecord = new GuidRecord { componentGuids = new SerializableDictionary<string, GuidItem>() };
+            guidRecord = new GuidRecord();
             _map.Add(query.TransformKey, guidRecord);
         }
 
@@ -104,27 +98,25 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         {
             if (overwriteIfExists)
             {
-                guidRecord.componentGuids[query.ComponentKey] = guidItem;
-                Save(true);
+                int idx = guidRecord.assignedGuids.FindIndex(g => g.globalObjectID == query.ComponentKey);
+                if (idx >= 0)
+                {
+                    guidRecord.assignedGuids[idx] = guidItem;
+                }
+                else
+                {
+                    guidRecord.assignedGuids.Add(guidItem);
+                }
+
+                Save();
                 EditorUtility.SetDirty(this);
             }
             else
             {
-                if (guidRecord.componentGuids.TryAdd(query.ComponentKey, guidItem))
+                if (!guidRecord.assignedGuids.Exists(g => g.globalObjectID == query.ComponentKey))
                 {
-                    Save(true);
-                    EditorUtility.SetDirty(this);
-                }
-            }
-        }
-        else if (query.ComponentGuid != SerializableGuid.Empty)
-        {
-            foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
-            {
-                if (componentGuid.guid == query.ComponentGuid)
-                {
-                    guidRecord.componentGuids[componentGuid.globalObjectID] = guidItem;
-                    Save(true);
+                    guidRecord.assignedGuids.Add(guidItem);
+                    Save();
                     EditorUtility.SetDirty(this);
                 }
             }
@@ -132,18 +124,20 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         else
         {
             guidRecord.transformGuid = guidItem;
-            Save(true);
+            Save();
             EditorUtility.SetDirty(this);
         }
     }
 
-    public void SetState(GuidItem item, GuidState state)
+    internal void ClearTransformOrphaned(string transformKey)
     {
-        Undo.RecordObject(this, $"Setting GUID state to {state.ToString()}");
-        item.state = state;
-
-        Save(true);
-        EditorUtility.SetDirty(this);
+        if (_map.TryGetValue(transformKey, out GuidRecord guidRecord) && guidRecord.transformOrphaned)
+        {
+            Undo.RecordObject(this, "Restoring Transform Guid");
+            guidRecord.transformOrphaned = false;
+            Save();
+            EditorUtility.SetDirty(this);
+        }
     }
 
     public void OrphanGuid(string transformGuidId, GuidItem item = null)
@@ -159,22 +153,19 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         {
             if (item != null)
             {
-                if (guidRecord.componentGuids.TryGetValue(item.globalObjectID, out GuidItem guidItem) &&
-                    guidItem.state == GuidState.Owned)
+                int componentIndex = guidRecord.assignedGuids.FindIndex(g => g.guid == item.guid);
+                if (componentIndex >= 0)
                 {
-                    guidRecord.componentGuids.Remove(item.globalObjectID);
+                    guidRecord.assignedGuids.RemoveAt(componentIndex);
+                    guidRecord.orphanedGuids.Add(item);
 
-                    item.state = GuidState.Orphaned;
-                    item.globalObjectID = OrphanedGuidObjectId;
-                    guidRecord.orphanedGuids.TryAdd(item.guid, item);
-
-                    Save(true);
+                    Save();
                     EditorUtility.SetDirty(this);
                 }
             }
             else
             {
-                guidRecord.transformGuid.state = GuidState.Orphaned;
+                guidRecord.transformOrphaned = true;
             }
         }
     }
@@ -185,15 +176,13 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
 
         if (_map.TryGetValue(transformGlobalObjectId, out GuidRecord guidRecord))
         {
-            if (guidRecord.orphanedGuids.TryGetValue(guidItem.guid, out _) && guidItem.state == GuidState.Orphaned)
+            if (guidRecord.orphanedGuids.Contains(guidItem))
             {
-                guidItem.state = GuidState.Owned;
+                guidRecord.orphanedGuids.Remove(guidItem);
                 guidItem.globalObjectID = componentGlobalObjectId;
+                guidRecord.assignedGuids.Add(guidItem);
 
-                guidRecord.orphanedGuids.Remove(guidItem.guid);
-                guidRecord.componentGuids.Add(componentGlobalObjectId, guidItem);
-
-                Save(true);
+                Save();
                 EditorUtility.SetDirty(this);
 
                 return true;
@@ -210,73 +199,58 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
             return;
         }
 
-        bool containsTransform = _map.TryGetValue(query.TransformKey, out GuidRecord guidRecord);
-        if (containsTransform)
+        if (!_map.TryGetValue(query.TransformKey, out GuidRecord guidRecord))
         {
-            Undo.RecordObject(this, "Remove GUID Mapping");
-            if (query.IsComponentKeyValid())
-            {
-                if (isOrphaned)
-                {
-                    if (guidRecord.orphanedGuids.TryGetValue(query.ComponentGuid, out GuidItem guidItem))
-                    {
-                        guidRecord.orphanedGuids.Remove(guidItem.guid);
-
-                        Save(true);
-                        EditorUtility.SetDirty(this);
-                        return;
-                    }
-                }
-                else
-                {
-                    if (guidRecord.componentGuids.TryGetValue(query.ComponentKey, out GuidItem guidItem))
-                    {
-                        guidRecord.componentGuids.Remove(guidItem.globalObjectID);
-
-                        Save(true);
-                        EditorUtility.SetDirty(this);
-                        return;
-                    }
-                }
-            }
-
-            if (query.ComponentGuid != SerializableGuid.Empty)
-            {
-                if (isOrphaned)
-                {
-                    foreach (GuidItem orphanedGuid in guidRecord.orphanedGuids.Values)
-                    {
-                        if (orphanedGuid.guid == query.ComponentGuid)
-                        {
-                            guidRecord.componentGuids.Remove(orphanedGuid.guid);
-
-                            Save(true);
-                            EditorUtility.SetDirty(this);
-                        }
-                    }
-                }
-                else
-                {
-                    foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
-                    {
-                        if (componentGuid.guid == query.ComponentGuid)
-                        {
-                            guidRecord.componentGuids.Remove(componentGuid.globalObjectID);
-
-                            Save(true);
-                            EditorUtility.SetDirty(this);
-                        }
-                    }
-                }
-
-                return;
-            }
-
-            _map.Remove(guidRecord.transformGuid.globalObjectID);
-
-            Save(true);
-            EditorUtility.SetDirty(this);
+            return;
         }
+
+        Undo.RecordObject(this, "Remove GUID Mapping");
+
+        if (isOrphaned && query.ComponentGuid != SerializableGuid.Empty)
+        {
+            for (int i = guidRecord.orphanedGuids.Count - 1; i >= 0; i--)
+            {
+                if (guidRecord.orphanedGuids[i].guid == query.ComponentGuid)
+                {
+                    guidRecord.orphanedGuids.RemoveAt(i);
+                    Save();
+                    EditorUtility.SetDirty(this);
+                    return;
+                }
+            }
+
+            return;
+        }
+
+        if (!isOrphaned && query.IsComponentKeyValid())
+        {
+            int idx = guidRecord.assignedGuids.FindIndex(g => g.globalObjectID == query.ComponentKey);
+            if (idx >= 0)
+            {
+                guidRecord.assignedGuids.RemoveAt(idx);
+                Save();
+                EditorUtility.SetDirty(this);
+            }
+
+            return;
+        }
+
+        if (!isOrphaned && query.ComponentGuid != SerializableGuid.Empty)
+        {
+            int idx = guidRecord.assignedGuids.FindIndex(g => g.guid == query.ComponentGuid);
+            if (idx >= 0)
+            {
+                guidRecord.assignedGuids.RemoveAt(idx);
+                Save();
+                EditorUtility.SetDirty(this);
+            }
+
+            return;
+        }
+
+        _map.Remove(query.TransformKey);
+        Save();
+        EditorUtility.SetDirty(this);
     }
 
     public bool Contains(GuidRecordQuery query)
@@ -289,7 +263,7 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         bool containsTransform = _map.TryGetValue(query.TransformKey, out GuidRecord value);
         if (query.IsComponentKeyValid() && value != null)
         {
-            return value.componentGuids.ContainsKey(query.ComponentKey);
+            return value.assignedGuids.Exists(g => g.globalObjectID == query.ComponentKey);
         }
 
         return containsTransform;
@@ -309,21 +283,14 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         {
             if (query.IsComponentKeyValid())
             {
-                return guidRecord.componentGuids.TryGetValue(query.ComponentKey, out guidItem);
+                guidItem = guidRecord.assignedGuids.Find(g => g.globalObjectID == query.ComponentKey);
+                return guidItem != null;
             }
 
             if (query.ComponentGuid != SerializableGuid.Empty)
             {
-                foreach (GuidItem componentGuid in guidRecord.componentGuids.Values)
-                {
-                    if (componentGuid.guid == query.ComponentGuid)
-                    {
-                        guidItem = componentGuid;
-                        return true;
-                    }
-                }
-
-                return false;
+                guidItem = guidRecord.assignedGuids.Find(g => g.guid == query.ComponentGuid);
+                return guidItem != null;
             }
 
             guidItem = guidRecord.transformGuid;
@@ -332,34 +299,8 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         return containsTransform;
     }
 
-    // Serialize
-    void ISerializationCallbackReceiver.OnBeforeSerialize()
-    {
-        keys.Clear();
-        values.Clear();
-
-        foreach (string key in _map.Keys)
-        {
-            keys.Add(key);
-            values.Add(_map[key]);
-        }
-    }
-
-    // Deserialize
-    void ISerializationCallbackReceiver.OnAfterDeserialize()
-    {
-        _map.Clear();
-
-        for (int i = 0; i < keys.Count; i++)
-        {
-            _map[keys[i]] = values[i];
-        }
-    }
-
     internal void Initialize()
     {
-        InitializeSingleton();
-
         Undo.undoRedoPerformed -= UndoRedoPerformed;
         Undo.undoRedoPerformed += UndoRedoPerformed;
 
@@ -372,7 +313,7 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
         switch (stateChange)
         {
             case PlayModeStateChange.EnteredEditMode:
-                ReloadInPlace();
+                // ReloadInPlace();
                 break;
             case PlayModeStateChange.ExitingEditMode:
                 break;
@@ -389,49 +330,52 @@ public class GuidMappings : ScriptableSingleton<GuidMappings>, ISerializationCal
 
     private void UndoRedoPerformed()
     {
-        Save(true);
+        Save();
     }
 
-    // internal static GuidMappings GetOrCreate()
-    // {
-    //     if (TryLoadAsset(out GuidReferenceMappings settings))
-    //     {
-    //         return settings;
-    //     }
-    //
-    //     settings = CreateInstance<GuidReferenceMappings>();
-    //     AssetDatabase.CreateAsset(settings, DefaultAssetPath);
-    //     AssetDatabase.SaveAssets();
-    //
-    //     return settings;
-    // }
+    internal static GuidMappings GetOrCreate()
+    {
+        if (TryLoadAsset(out GuidMappings settings))
+        {
+            return settings;
+        }
 
-    // internal static bool TryLoadAsset(out GuidReferenceMappings settings)
-    // {
-    //     string assetPath = EditorPrefs.GetString(AssetPathKey, DefaultAssetPath);
-    //     // try to load at the saved or default path
-    //     settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
-    //     if (settings != null)
-    //     {
-    //         return true;
-    //     }
-    //
-    //     // if no asset at path try to find it in project's assets
-    //     string assetGuid = AssetDatabase.FindAssets($"t:{typeof(GuidReferenceMappings)}").FirstOrDefault();
-    //     if (string.IsNullOrEmpty(assetGuid))
-    //     {
-    //         return false;
-    //     }
-    //
-    //     assetPath = AssetDatabase.GUIDToAssetPath(assetGuid);
-    //     settings = AssetDatabase.LoadAssetAtPath<GuidReferenceMappings>(assetPath);
-    //
-    //     if (settings == null)
-    //     {
-    //         return false;
-    //     }
-    //
-    //     EditorPrefs.SetString(AssetPathKey, assetPath);
-    //     return true;
-    // }
+        settings = CreateInstance<GuidMappings>();
+        settings.Initialize();
+        SaveToJson(settings, AssetPath);
+
+        return settings;
+    }
+
+    internal static bool TryLoadAsset(out GuidMappings settings)
+    {
+        settings = null;
+        if (File.Exists(AssetPath))
+        {
+            settings = LoadFromJson<GuidMappings>(AssetPath);
+        }
+
+        return settings != null;
+    }
+
+    private static T LoadFromJson<T>(string path) where T : ScriptableObject
+    {
+        string json = File.ReadAllText(path);
+        return JsonUtility.FromJson<T>(json);
+    }
+
+    private static void SaveToJson(ScriptableObject obj, string path)
+    {
+        string json = JsonUtility.ToJson(obj, true);
+        File.WriteAllText(path, json);
+    }
+
+    protected void Save()
+    {
+        // Only save state in edit mode.
+        if (!EditorApplication.isPlaying)
+        {
+            SaveToJson(this, AssetPath);
+        }
+    }
 }
