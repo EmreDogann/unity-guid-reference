@@ -5,7 +5,7 @@ using Sherbert.Framework.Generic;
 using UnityEditor;
 using UnityEngine;
 
-public class GuidMappings : ScriptableObject
+public sealed class GuidMappings : ScriptableObject
 {
     private static GuidMappings s_Instance;
     public static GuidMappings Instance
@@ -21,7 +21,7 @@ public class GuidMappings : ScriptableObject
         }
     }
 
-    protected GuidMappings()
+    private GuidMappings()
     {
         if (s_Instance != null)
         {
@@ -325,13 +325,16 @@ public class GuidMappings : ScriptableObject
         return containsTransform;
     }
 
-    internal void Initialize()
+    private void OnEnable()
+    {
+        Undo.undoRedoPerformed += UndoRedoPerformed;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+    }
+
+    private void OnDisable()
     {
         Undo.undoRedoPerformed -= UndoRedoPerformed;
-        Undo.undoRedoPerformed += UndoRedoPerformed;
-
         EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
     }
 
     private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
@@ -339,15 +342,17 @@ public class GuidMappings : ScriptableObject
         switch (stateChange)
         {
             case PlayModeStateChange.EnteredEditMode:
-                // ReloadInPlace();
+                Debug.Log("Entered Editmode");
                 break;
             case PlayModeStateChange.ExitingEditMode:
+                Debug.Log("Exiting Editmode");
                 break;
             case PlayModeStateChange.EnteredPlayMode:
+                Debug.Log("Entered Playmode");
                 break;
             case PlayModeStateChange.ExitingPlayMode:
                 Debug.Log("Exiting Playmode");
-
+                LoadOrCreate();
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(stateChange), stateChange, null);
@@ -356,22 +361,33 @@ public class GuidMappings : ScriptableObject
 
     private void UndoRedoPerformed()
     {
+        Debug.Log("Undo Saving...");
         Save();
     }
 
-    internal static GuidMappings LoadOrCreate()
+    [MenuItem("Tools/Guid Referencing/Reload Mappings")]
+    private static void ReloadGuidMappings()
     {
-        GuidMappings settings = CreateInstance<GuidMappings>();
-        settings.hideFlags = HideFlags.HideAndDontSave;
-        if (TryLoadAsset(settings))
+        DestroyImmediate(s_Instance);
+        Undo.ClearUndo(s_Instance);
+        LoadOrCreate();
+
+        Debug.Log("Cleared Guid Mappings");
+    }
+
+    internal static void LoadOrCreate()
+    {
+        if (s_Instance == null)
         {
-            return settings;
+            CreateInstance<GuidMappings>().hideFlags = HideFlags.HideAndDontSave;
         }
 
-        settings.Initialize();
-        SaveToJson(settings, AssetPath);
+        if (TryLoadAsset(s_Instance))
+        {
+            return;
+        }
 
-        return settings;
+        SaveToJson(s_Instance, AssetPath);
     }
 
     internal static bool TryLoadAsset(GuidMappings settings)
@@ -379,24 +395,26 @@ public class GuidMappings : ScriptableObject
         if (File.Exists(AssetPath))
         {
             LoadFromJson(AssetPath, settings);
+            return true;
         }
 
-        return settings != null;
+        //
+        return false;
     }
 
     private static void LoadFromJson<T>(string path, T objectInstance) where T : ScriptableObject
     {
         string json = File.ReadAllText(path);
-        JsonUtility.FromJsonOverwrite(json, objectInstance);
+        EditorJsonUtility.FromJsonOverwrite(json, objectInstance);
     }
 
     private static void SaveToJson(ScriptableObject obj, string path)
     {
-        string json = JsonUtility.ToJson(obj, true);
+        string json = EditorJsonUtility.ToJson(obj, true);
         File.WriteAllText(path, json);
     }
 
-    protected void Save()
+    private void Save()
     {
         // Only save state in edit mode.
         if (!EditorApplication.isPlaying)
