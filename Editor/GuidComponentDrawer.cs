@@ -140,9 +140,22 @@ public class GuidComponentDrawer : Editor
                     break;
                 case ObjectChangeKind.ChangeGameObjectStructureHierarchy:    // Component Order changed.
                 case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // GuidComponent Changed.
-                case ObjectChangeKind.ChangeGameObjectStructure:             // Game Object changed.
                     needsNotifyGuidComponent = true;
                     needsComponentListRebuilding = true;
+                    break;
+                case ObjectChangeKind.ChangeGameObjectStructure: // Game Object changed.
+                    stream.GetChangeGameObjectStructureEvent(i,
+                        out ChangeGameObjectStructureEventArgs changeGameObjectStructure);
+                    GameObject gameObjectStructure =
+                        EditorUtility.EntityIdToObject(changeGameObjectStructure.instanceId) as GameObject;
+                    GuidComponent guidComponent = gameObjectStructure.GetComponent<GuidComponent>();
+
+                    if (_guidComp == guidComponent)
+                    {
+                        needsNotifyGuidComponent = true;
+                        needsComponentListRebuilding = true;
+                    }
+
                     break;
             }
         }
@@ -338,7 +351,8 @@ public class GuidComponentDrawer : Editor
             {
                 Component draggedObject = DragAndDrop.objectReferences[0] as Component;
                 if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject) ||
-                    draggedObject.GetType() != orphanedGuid.GuidItem.ownerType.Type)
+                    draggedObject.GetType() != orphanedGuid.GuidItem.ownerType.Type ||
+                    _guidComp.GetGuid(draggedObject) != Guid.Empty)
                 {
                     DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
                     evt.StopImmediatePropagation();
@@ -639,6 +653,16 @@ public class GuidComponentDrawer : Editor
                         ContentRect((VisualElement)evt.currentTarget, ((VisualElement)evt.currentTarget).layout);
                     });
 
+                    void CustomContextMenuItems(GenericMenu menu)
+                    {
+                        menu.AddItem(new GUIContent("Remove Guid Component"), false,
+                            () =>
+                            {
+                                _guidComp.RemoveAllComponentGuids();
+                                Undo.DestroyObjectImmediate(_guidComp);
+                            });
+                    }
+
                     InspectorElement inspector = InspectorElementField.GetValue(element) as InspectorElement;
                     IMGUIContainer footer = FooterElementField.GetValue(element) as IMGUIContainer;
                     _inspectorHeader =
@@ -648,7 +672,8 @@ public class GuidComponentDrawer : Editor
                                 DrawEnableToggle = false,
                                 DrawHelpIcon = false,
                                 DrawPresetIcon = false,
-                                HeaderTitleOverride = "Guid"
+                                HeaderTitleOverride = "Guid",
+                                CustomContextMenuItems = CustomContextMenuItems
                             });
 
                     // Do this when visual tree is mostly ready.

@@ -12,9 +12,16 @@ public class GuidManagerEditor
     // Instance data
     private static PlayModeStateChange _playModeStateChange;
 
+    private static GuidMappings _guidMappings;
+
     private static GuidMappings GetMappings()
     {
-        return GuidMappings.instance;
+        if (_guidMappings == null)
+        {
+            _guidMappings = GetOrCreate();
+        }
+
+        return _guidMappings;
     }
 
     private static void Register(ComponentGuid componentGuid, SerializableGuid guid)
@@ -32,12 +39,11 @@ public class GuidManagerEditor
 
         GuidItem item = new GuidItem
         {
-            guid = guid,
             globalObjectID = componentGuid.IsRootComponent()
                 ? componentGuid.GlobalGameObjectId
                 : componentGuid.GlobalComponentId,
-            ownerType = new SerializableType(componentGuid.GetOwningType()),
-            state = GuidState.Owned
+            guid = guid,
+            ownerType = new SerializedType(componentGuid.GetOwningType())
         };
 
         GetMappings().Add(query, item);
@@ -45,18 +51,13 @@ public class GuidManagerEditor
 
     public static void Unregister(OrphanedGuidItemInfo orphanedGuid)
     {
-        Unregister(orphanedGuid.TransformGuid, orphanedGuid.GuidItem, true);
-    }
-
-    public static void Unregister(GuidItem owningTransformGuid, GuidItem guidItem, bool isOrphaned = false)
-    {
         GuidRecordQuery query = new GuidRecordQuery(
-            owningTransformGuid.globalObjectID,
-            guidItem.globalObjectID,
-            guidItem.guid
+            orphanedGuid.TransformKey,
+            "",
+            orphanedGuid.GuidItem.guid
         );
 
-        GetMappings().Remove(query, isOrphaned);
+        GetMappings().Remove(query, true);
     }
 
     private static bool TryRestore(ComponentGuid componentGuid, out Guid guid)
@@ -72,7 +73,10 @@ public class GuidManagerEditor
             componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId);
         if (GetMappings().TryGet(query, out _, out GuidItem guidItem))
         {
-            GetMappings().SetState(guidItem, GuidState.Owned);
+            if (componentGuid.IsRootComponent())
+            {
+                GetMappings().ClearTransformOrphaned(componentGuid.GlobalGameObjectId);
+            }
             guid = guidItem.guid.Guid;
 
             return true;
@@ -103,16 +107,13 @@ public class GuidManagerEditor
         GuidRecordQuery query = new GuidRecordQuery(componentGuid.GlobalGameObjectId);
         if (GetMappings().TryGet(query, out GuidRecord guidRecord, out _))
         {
-            foreach (GuidItem guidItem in guidRecord.orphanedGuids.Values)
+            foreach (GuidItem guidItem in guidRecord.orphanedGuids)
             {
-                if (guidItem.state == GuidState.Orphaned)
+                yield return new OrphanedGuidItemInfo
                 {
-                    yield return new OrphanedGuidItemInfo
-                    {
-                        TransformGuid = guidRecord.transformGuid,
-                        GuidItem = guidItem
-                    };
-                }
+                    TransformKey = query.TransformKey,
+                    GuidItem = guidItem
+                };
             }
         }
     }
@@ -133,7 +134,6 @@ public class GuidManagerEditor
 
     static GuidManagerEditor()
     {
-        GuidMappings.instance.Initialize();
         GuidComponent.OnGuidRequested -= TryRestoreOrCreateGuid;
         GuidComponent.OnGuidRequested += TryRestoreOrCreateGuid;
 
@@ -155,7 +155,7 @@ public class GuidManagerEditor
 
         if (GetMappings().TryGet(query, out GuidRecord record, out GuidItem item))
         {
-            GetMappings().OrphanGuid(record.transformGuid.globalObjectID, guid.IsRootComponent() ? null : item);
+            GetMappings().OrphanGuid(guid.GlobalGameObjectId, guid.IsRootComponent() ? null : item);
         }
     }
 
@@ -240,6 +240,7 @@ public class GuidManagerEditor
                     stream.GetDestroyGameObjectHierarchyEvent(i,
                         out DestroyGameObjectHierarchyEventArgs destroyGameObjectHierarchyEvent);
                     // The destroyed GameObject can not be converted with EditorUtility.InstanceIDToObject as it has already been destroyed.
+                    Debug.Log(GlobalObjectId.GetGlobalObjectIdSlow(destroyGameObjectHierarchyEvent.instanceId));
                     GameObject destroyParentGo =
                         EditorUtility.EntityIdToObject(destroyGameObjectHierarchyEvent
                             .parentInstanceId) as GameObject;

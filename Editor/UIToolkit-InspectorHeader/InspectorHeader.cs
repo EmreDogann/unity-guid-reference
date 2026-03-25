@@ -19,6 +19,7 @@ public class InspectorHeader : VisualElement
         public bool DrawPresetIcon = true;
         public bool DrawSettingsIcon = true;
         public bool EnableContextMenu = true;
+        public Action<GenericMenu> CustomContextMenuItems = null;
         public string HeaderTitleOverride = "";
     }
 
@@ -26,20 +27,31 @@ public class InspectorHeader : VisualElement
     private readonly InspectorElement _inspectorElement;
     private readonly IMGUIContainer _footerElement;
     private readonly DrawSettings _drawSettings;
-    private readonly Action<GenericMenu, Rect, Object[], int> _showContextMenu;
+    private readonly Action<GenericMenu, Rect, Object[], int> _showDefaultContextMenu;
+    private readonly Action<GenericMenu> _customContextMenu;
 
     public InspectorHeader(SerializedObject serializedObject, InspectorElement inspectorElement,
         IMGUIContainer footer, DrawSettings drawSettings = null)
     {
-        MethodInfo contextMenuMethod = typeof(GenericMenu).GetMethod("ObjectContextDropDown",
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance, null,
-            new[] { typeof(Rect), typeof(Object[]), typeof(int) }, null);
-
-        if (contextMenuMethod != null)
+        if (drawSettings?.EnableContextMenu == true)
         {
-            _showContextMenu =
-                (Action<GenericMenu, Rect, Object[], int>)Delegate.CreateDelegate(
-                    typeof(Action<GenericMenu, Rect, Object[], int>), contextMenuMethod, false);
+            if (drawSettings?.CustomContextMenuItems != null)
+            {
+                _customContextMenu = drawSettings.CustomContextMenuItems;
+            }
+            else
+            {
+                MethodInfo contextMenuMethod = typeof(GenericMenu).GetMethod("ObjectContextDropDown",
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance, null,
+                    new[] { typeof(Rect), typeof(Object[]), typeof(int) }, null);
+
+                if (contextMenuMethod != null)
+                {
+                    _showDefaultContextMenu =
+                        (Action<GenericMenu, Rect, Object[], int>)Delegate.CreateDelegate(
+                            typeof(Action<GenericMenu, Rect, Object[], int>), contextMenuMethod, false);
+                }
+            }
         }
 
         styleSheets.Add(StyleSheetUtility.InspectorHeaderStyle);
@@ -295,10 +307,17 @@ public class InspectorHeader : VisualElement
 //             menu.AddItem(editNameLabel, false, () => editableLabel.BeginEditing());
 //         }
 
-        AddItemsToContextMenu(menu, header, serializedObject);
-
-        position.position = GUIUtility.GUIToScreenPoint(position.position);
-        _showContextMenu?.Invoke(menu, position, serializedObject.targetObjects, 0);
+        if (_customContextMenu != null)
+        {
+            _customContextMenu.Invoke(menu);
+            AddItemsToContextMenu(menu, header, serializedObject);
+            menu.DropDown(position);
+        }
+        else
+        {
+            position.position = GUIUtility.GUIToScreenPoint(position.position);
+            _showDefaultContextMenu?.Invoke(menu, position, serializedObject.targetObjects, 0);
+        }
     }
 
     private void ShowPresetSelector(SerializedObject serializedObject)

@@ -41,6 +41,15 @@ public class GuidComponent : MonoBehaviour
             OnGuidRemoved?.Invoke(componentGuid);
         }
     }
+
+    internal void RemoveAllComponentGuids()
+    {
+        OnGuidRemoved?.Invoke(transformGuid);
+        foreach (ComponentGuid componentGuid in componentGuids)
+        {
+            OnGuidRemoved?.Invoke(componentGuid);
+        }
+    }
 #endif
 
     #region Equality
@@ -214,7 +223,7 @@ public class GuidComponent : MonoBehaviour
     {
         if (component is GuidComponent)
         {
-            return Guid.Empty;
+            return transformGuid.serializableGuid.Guid;
         }
 
         foreach (ComponentGuid componentGuid in componentGuids.Where(componentGuid =>
@@ -372,6 +381,7 @@ public class GuidComponent : MonoBehaviour
         }
 
         EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        ObjectChangeEvents.changesPublished += ChangesPublished;
 
         Debug.Log("Awake()");
         InitializeGuids();
@@ -385,6 +395,41 @@ public class GuidComponent : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    private void ChangesPublished(ref ObjectChangeEventStream stream)
+    {
+        bool guidComponentRemoved = false;
+        for (int i = 0; i < stream.length; ++i)
+        {
+            ObjectChangeKind type = stream.GetEventType(i);
+            switch (type)
+            {
+                // case ObjectChangeKind.DestroyGameObjectHierarchy: // Game Object Destroyed.
+                case ObjectChangeKind.ChangeGameObjectStructure: // Component Added/Removed.
+                    guidComponentRemoved = true;
+
+                    stream.GetChangeGameObjectStructureEvent(i,
+                        out ChangeGameObjectStructureEventArgs changeGameObjectStructure);
+                    GameObject gameObjectStructure =
+                        EditorUtility.EntityIdToObject(changeGameObjectStructure.instanceId) as GameObject;
+
+
+                    // GuidComponent guidComponent = gameObjectStructure.GetComponent<GuidComponent>();
+                    // if (guidComponent)
+                    // {
+                    //     foreach (ComponentGuid componentGuid in guidComponent.componentGUIDs)
+                    //     {
+                    //         if (!componentGuid.cachedComponent)
+                    //         {
+                    //             SetGuidState(gameObjectStructure, componentGuid.Guid,
+                    //                 GuidReferenceMappings.GuidState.Orphaned);
+                    //         }
+                    //     }
+                    // }
+                    break;
+            }
+        }
+    }
+
     private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
     {
         _currentPlaymodeState = stateChange;
@@ -453,20 +498,16 @@ public class GuidComponent : MonoBehaviour
     {
 #if UNITY_EDITOR
         Debug.Log("OnDestroy()");
-
-        if (IsAssetOnDisk() || EditorApplication.isPlayingOrWillChangePlaymode ||
-            _currentPlaymodeState == PlayModeStateChange.ExitingPlayMode)
-        {
-            return;
-        }
+        //
+        // if (IsAssetOnDisk() || EditorApplication.isPlayingOrWillChangePlaymode ||
+        //     _currentPlaymodeState == PlayModeStateChange.ExitingPlayMode)
+        // {
+        //     return;
+        // }
 
         EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        ObjectChangeEvents.changesPublished -= ChangesPublished;
 
-        OnGuidRemoved?.Invoke(transformGuid);
-        foreach (ComponentGuid componentGuid in componentGuids)
-        {
-            OnGuidRemoved?.Invoke(componentGuid);
-        }
 #endif
         {
             GuidManager.Remove(transformGuid.serializableGuid.Guid);
