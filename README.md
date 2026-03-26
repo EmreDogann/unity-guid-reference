@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> Currently undergoing a major refactor. If you would like to use the last stable version of this plugin, please use version from the master branch commit: [94a157b57c59e6b9a21ef86f1194885a98f53c1d](https://github.com/EmreDogann/unity-guid-reference/tree/94a157b57c59e6b9a21ef86f1194885a98f53c1d)
+
 # Guid Based Reference
 
 _Globaly Unique IDentifier (GUID) for Game Objects and Components_
