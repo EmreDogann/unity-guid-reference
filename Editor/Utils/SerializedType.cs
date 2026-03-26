@@ -1,28 +1,26 @@
 ﻿using System;
+using UnityEngine.Serialization;
 
 namespace UnityEngine
 {
-    using UnityEngine.Serialization;
-
     /// <summary>
-    /// Reference to a class <see cref="System.Type"/> with support for Unity serialization.
+    ///     Reference to a class <see cref="System.Type" /> with support for Unity serialization.
     /// </summary>
     [Serializable]
     public sealed class SerializedType : ISerializationCallbackReceiver
     {
-        [SerializeField, FormerlySerializedAs("classReference")]
+        [SerializeField] [FormerlySerializedAs("classReference")]
         private string typeReference;
 
         private Type type;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SerializedType"/> class.
+        ///     Initializes a new instance of the <see cref="SerializedType" /> class.
         /// </summary>
-        public SerializedType()
-        { }
+        public SerializedType() {}
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SerializedType"/> class.
+        ///     Initializes a new instance of the <see cref="SerializedType" /> class.
         /// </summary>
         /// <param name="assemblyQualifiedTypeName">Assembly qualified class name.</param>
         public SerializedType(string assemblyQualifiedTypeName)
@@ -33,11 +31,11 @@ namespace UnityEngine
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SerializedType"/> class.
+        ///     Initializes a new instance of the <see cref="SerializedType" /> class.
         /// </summary>
         /// <param name="type">Class type.</param>
         /// <exception cref="ArgumentException">
-        /// If <paramref name="type"/> is not a class type.
+        ///     If <paramref name="type" /> is not a class type.
         /// </exception>
         public SerializedType(Type type)
         {
@@ -60,7 +58,7 @@ namespace UnityEngine
 
         public override string ToString()
         {
-            return Type != null ? Type.FullName : $"(None)";
+            return Type != null ? Type.FullName : "(None)";
         }
 
         void ISerializationCallbackReceiver.OnAfterDeserialize()
@@ -81,18 +79,17 @@ namespace UnityEngine
             }
         }
 
-        void ISerializationCallbackReceiver.OnBeforeSerialize()
-        { }
+        void ISerializationCallbackReceiver.OnBeforeSerialize() {}
 
         /// <summary>
-        /// Gets or sets type of class reference.
+        ///     Gets or sets type of class reference.
         /// </summary>
         /// <exception cref="ArgumentException">
-        /// If <paramref name="value"/> is not a class type.
+        ///     If <paramref name="value" /> is not a class type.
         /// </exception>
         public Type Type
         {
-            get { return type; }
+            get => type;
             set
             {
                 if (value != null && !value.IsClass)
@@ -105,10 +102,19 @@ namespace UnityEngine
             }
         }
 
-        public static implicit operator string(SerializedType typeReference) => typeReference.typeReference;
+        public static implicit operator string(SerializedType typeReference)
+        {
+            return typeReference.typeReference;
+        }
 
-        public static implicit operator Type(SerializedType typeReference) => typeReference.Type;
+        public static implicit operator Type(SerializedType typeReference)
+        {
+            return typeReference.Type;
+        }
 
-        public static implicit operator SerializedType(Type type) => new SerializedType(type);
+        public static implicit operator SerializedType(Type type)
+        {
+            return new SerializedType(type);
+        }
     }
 }
