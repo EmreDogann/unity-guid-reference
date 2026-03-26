@@ -21,6 +21,17 @@ public class GuidComponentDrawer : Editor
     private GuidComponent _guidComp;
     private InspectorHeader _inspectorHeader;
     private VisualElement _componentGUIDsContainer;
+    private DragAndDrop.HierarchyDropHandlerV2 _hierarchyDropHandler;
+
+    // Hierarchy Drop handler to prevent dragging and dropping GuidComponent onto other Game Objects.
+    private DragAndDropVisualMode HeaderHierarchyDropHandler(
+        EntityId dropTargetEntityId,
+        HierarchyDropFlags dropMode,
+        Transform parentForDraggedObjects,
+        bool perform)
+    {
+        return DragAndDropVisualMode.Rejected;
+    }
 
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
@@ -33,6 +44,13 @@ public class GuidComponentDrawer : Editor
         if (EditorApplication.isCompiling)
         {
             return root;
+        }
+
+        if (_hierarchyDropHandler == null ||
+            !DragAndDrop.HasHandler(DragAndDropWindowTarget.hierarchy, _hierarchyDropHandler))
+        {
+            _hierarchyDropHandler = HeaderHierarchyDropHandler;
+            DragAndDrop.AddDropHandlerV2(_hierarchyDropHandler);
         }
 
         root.RegisterCallback<AttachToPanelEvent>(_ => ObjectChangeEvents.changesPublished += ChangesPublished);
