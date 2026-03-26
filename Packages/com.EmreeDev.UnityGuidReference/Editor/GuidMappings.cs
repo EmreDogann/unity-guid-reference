@@ -113,7 +113,6 @@ public sealed class GuidMappings : ScriptableObject
                 if (!guidRecord.assignedGuids.Exists(g => g.globalObjectID == componentKey))
                 {
                     guidRecord.assignedGuids.Add(guidItem);
-
                     Save();
                 }
             }
@@ -121,7 +120,6 @@ public sealed class GuidMappings : ScriptableObject
         else
         {
             guidRecord.transformGuid = guidItem;
-
             Save();
         }
     }
@@ -162,6 +160,7 @@ public sealed class GuidMappings : ScriptableObject
             else
             {
                 guidRecord.transformOrphaned = true;
+                Save();
             }
         }
     }
