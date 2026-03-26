@@ -35,6 +35,8 @@ public class GuidComponent : MonoBehaviour
     [SerializeField] [HideInInspector]
     internal bool undoTriggerFlag;
 
+    private static bool _isQuitting;
+
     // Purely for GuidComponentDrawer as external classes cannot invoke 'event' specified Actions.
     internal void RemoveComponentGuid(ComponentGuid componentGuid)
     {
@@ -375,7 +377,9 @@ public class GuidComponent : MonoBehaviour
 
     private void Awake()
     {
-#if !UNITY_EDITOR
+#if UNITY_EDITOR
+        EditorApplication.quitting += OnEditorQuitting;
+#else
         FindOrCreateGuid(transformGuid);
         foreach (ComponentGuid componentGuid in componentGuids)
         {
@@ -385,6 +389,11 @@ public class GuidComponent : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    private void OnEditorQuitting()
+    {
+        _isQuitting = true;
+    }
+
     internal void OnValidate()
     {
         if (IsAssetOnDisk())
@@ -410,7 +419,16 @@ public class GuidComponent : MonoBehaviour
     // Let the manager know we are gone, so other objects no longer find this.
     public void OnDestroy()
     {
-#if !UNITY_EDITOR
+#if UNITY_EDITOR
+        // Only want to orphan guids when the user themselves has removed the component, either directly or indirectly via gameobject deletion.
+        if (IsAssetOnDisk() || _isQuitting || EditorApplication.isPlayingOrWillChangePlaymode ||
+            !gameObject.scene.isLoaded)
+        {
+            return;
+        }
+
+        RemoveAllComponentGuids();
+#else
         GuidManager.Remove(transformGuid.serializableGuid.Guid);
         foreach (ComponentGuid componentGuid in componentGuids)
         {
