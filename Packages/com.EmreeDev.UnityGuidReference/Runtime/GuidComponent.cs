@@ -30,7 +30,10 @@ public class GuidComponent : MonoBehaviour
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
 
-    private PlayModeStateChange _currentPlaymodeState;
+    // Hack: Incremented before editor operations that only modify GuidMappings (i.e. Removing/Unregistering Guids in GuidManagerEditor).
+    // Creates a real serialized change so Unity includes this undo group in play mode cleanup.
+    [SerializeField] [HideInInspector]
+    internal bool undoTriggerFlag;
 
     // Purely for GuidComponentDrawer as external classes cannot invoke 'event' specified Actions.
     internal void RemoveComponentGuid(ComponentGuid componentGuid)
@@ -276,8 +279,6 @@ public class GuidComponent : MonoBehaviour
             {
                 componentGuid.serializableGuid = OnGuidRequested.Invoke(componentGuid);
             }
-
-            EditorUtility.SetDirty(this);
         }
 #else
         // If our serialized data is invalid, either something went wrong, or we are a new object instantiated at runtime,
@@ -374,18 +375,7 @@ public class GuidComponent : MonoBehaviour
 
     private void Awake()
     {
-#if UNITY_EDITOR
-        if (IsAssetOnDisk())
-        {
-            return;
-        }
-
-        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-        ObjectChangeEvents.changesPublished += ChangesPublished;
-
-        Debug.Log("Awake()");
-        InitializeGuids();
-#else
+#if !UNITY_EDITOR
         FindOrCreateGuid(transformGuid);
         foreach (ComponentGuid componentGuid in componentGuids)
         {
@@ -395,57 +385,6 @@ public class GuidComponent : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    private void ChangesPublished(ref ObjectChangeEventStream stream)
-    {
-        bool guidComponentRemoved = false;
-        for (int i = 0; i < stream.length; ++i)
-        {
-            ObjectChangeKind type = stream.GetEventType(i);
-            switch (type)
-            {
-                // case ObjectChangeKind.DestroyGameObjectHierarchy: // Game Object Destroyed.
-                case ObjectChangeKind.ChangeGameObjectStructure: // Component Added/Removed.
-                    guidComponentRemoved = true;
-
-                    stream.GetChangeGameObjectStructureEvent(i,
-                        out ChangeGameObjectStructureEventArgs changeGameObjectStructure);
-                    GameObject gameObjectStructure =
-                        EditorUtility.EntityIdToObject(changeGameObjectStructure.instanceId) as GameObject;
-
-
-                    // GuidComponent guidComponent = gameObjectStructure.GetComponent<GuidComponent>();
-                    // if (guidComponent)
-                    // {
-                    //     foreach (ComponentGuid componentGuid in guidComponent.componentGUIDs)
-                    //     {
-                    //         if (!componentGuid.cachedComponent)
-                    //         {
-                    //             SetGuidState(gameObjectStructure, componentGuid.Guid,
-                    //                 GuidReferenceMappings.GuidState.Orphaned);
-                    //         }
-                    //     }
-                    // }
-                    break;
-            }
-        }
-    }
-
-    private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
-    {
-        _currentPlaymodeState = stateChange;
-    }
-
-    private void Reset()
-    {
-        if (IsAssetOnDisk())
-        {
-            return;
-        }
-
-        Debug.Log("Reset()");
-        InitializeGuids();
-    }
-
     internal void OnValidate()
     {
         if (IsAssetOnDisk())
@@ -454,28 +393,6 @@ public class GuidComponent : MonoBehaviour
         }
 
         Debug.Log("OnValidate()");
-
-        // Try and restore cached values.
-        // This used to be done in OnAfterDeserialize(), however that function does not work well with Undo/Redo
-        // (will tend to overwrite the undo state with the dump value), so we try to restore in OnValidate() instead.
-        // This way we can check for undo events and not restore dump values if so.
-
-        // if (!Undo.isProcessing) // Cannot be polled in OnAfterDeserialize().
-        // {
-        //     if (_transformGuidDump != null)
-        //     {
-        //         transformGuid = _transformGuidDump;
-        //     }
-        //
-        //     if (_componentGuidsDump != null && _componentGuidsDump.Count > 0)
-        //     {
-        //         componentGuids.Clear();
-        //         foreach (ComponentGuid componentGuid in _componentGuidsDump)
-        //         {
-        //             componentGuids.Add(componentGuid);
-        //         }
-        //     }
-        // }
 
         InitializeGuids();
 
@@ -498,23 +415,11 @@ public class GuidComponent : MonoBehaviour
     {
 #if UNITY_EDITOR
         Debug.Log("OnDestroy()");
-        //
-        // if (IsAssetOnDisk() || EditorApplication.isPlayingOrWillChangePlaymode ||
-        //     _currentPlaymodeState == PlayModeStateChange.ExitingPlayMode)
-        // {
-        //     return;
-        // }
-
-        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-        ObjectChangeEvents.changesPublished -= ChangesPublished;
-
 #endif
+        GuidManager.Remove(transformGuid.serializableGuid.Guid);
+        foreach (ComponentGuid componentGuid in componentGuids)
         {
-            GuidManager.Remove(transformGuid.serializableGuid.Guid);
-            foreach (ComponentGuid componentGuid in componentGuids)
-            {
-                GuidManager.Remove(componentGuid.serializableGuid.Guid);
-            }
+            GuidManager.Remove(componentGuid.serializableGuid.Guid);
         }
     }
 }

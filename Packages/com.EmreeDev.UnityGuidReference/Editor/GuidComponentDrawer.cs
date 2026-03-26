@@ -135,37 +135,38 @@ public class GuidComponentDrawer : Editor
             ObjectChangeKind type = stream.GetEventType(i);
             switch (type)
             {
-                case ObjectChangeKind.ChangeAssetObjectProperties: // GuidReferenceMapping changed.
-                    needsComponentListRebuilding = true;
-                    break;
-                case ObjectChangeKind.ChangeGameObjectStructureHierarchy:    // Component Order changed.
-                case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // GuidComponent Changed.
-                    needsNotifyGuidComponent = true;
-                    needsComponentListRebuilding = true;
-                    break;
-                case ObjectChangeKind.ChangeGameObjectStructure: // Game Object changed.
-                    stream.GetChangeGameObjectStructureEvent(i,
-                        out ChangeGameObjectStructureEventArgs changeGameObjectStructure);
-                    GameObject gameObjectStructure =
-                        EditorUtility.EntityIdToObject(changeGameObjectStructure.instanceId) as GameObject;
-                    GuidComponent guidComponent = gameObjectStructure.GetComponent<GuidComponent>();
-
-                    if (_guidComp == guidComponent)
+                case ObjectChangeKind.ChangeGameObjectStructureHierarchy: // Component order changed.
+                    stream.GetChangeGameObjectStructureHierarchyEvent(i,
+                        out ChangeGameObjectStructureHierarchyEventArgs hierarchyArgs);
+                    if (_guidComp && hierarchyArgs.instanceId == _guidComp.gameObject.GetInstanceID())
                     {
                         needsNotifyGuidComponent = true;
-                        needsComponentListRebuilding = true;
                     }
 
+                    needsComponentListRebuilding = true;
+                    break;
+                case ObjectChangeKind.ChangeGameObjectStructure: // Component added/removed.
+                    stream.GetChangeGameObjectStructureEvent(i,
+                        out ChangeGameObjectStructureEventArgs structureArgs);
+                    if (_guidComp && structureArgs.instanceId == _guidComp.gameObject.GetInstanceID())
+                    {
+                        needsNotifyGuidComponent = true;
+                    }
+
+                    needsComponentListRebuilding = true;
+                    break;
+                case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // Properties changed.
+                    needsComponentListRebuilding = true;
                     break;
             }
         }
 
-        if (needsNotifyGuidComponent)
+        if (needsNotifyGuidComponent && _guidComp)
         {
             _guidComp.OnValidate();
         }
 
-        if (needsComponentListRebuilding)
+        if (needsComponentListRebuilding && _guidComp && _componentGUIDsContainer != null)
         {
             RebuildGuidList(_componentGUIDsContainer);
         }
@@ -228,8 +229,8 @@ public class GuidComponentDrawer : Editor
                 Undo.RecordObject(_guidComp, "Orphaning Guid from Component");
                 _guidComp.RemoveComponentGuid(componentGuid);
 
+                _guidComp.OnValidate();
                 serializedObject.Update();
-                EditorUtility.SetDirty(_guidComp);
             };
             labelFieldComponentGuid.contentContainer.Add(button);
 
@@ -289,8 +290,8 @@ public class GuidComponentDrawer : Editor
                     OwningGameObject = _guidComp.gameObject
                 });
 
+                _guidComp.OnValidate();
                 serializedObject.Update();
-                EditorUtility.SetDirty(_guidComp);
             };
 
             element.Add(icon);
@@ -378,8 +379,8 @@ public class GuidComponentDrawer : Editor
                         _guidComp.componentGuids.Add(componentGuid);
                     }
 
+                    _guidComp.OnValidate();
                     serializedObject.Update();
-                    EditorUtility.SetDirty(_guidComp);
 
                     evt.StopImmediatePropagation();
                 }
@@ -436,7 +437,15 @@ public class GuidComponentDrawer : Editor
             };
             button.AddToClassList("remove-button");
 
-            button.clickable.clicked += () => { GuidManagerEditor.Unregister(orphanedGuid); };
+            button.clickable.clicked += () =>
+            {
+                // Hack: In order to mark the undo group as scene-dependent, we must modify a scene object into the undo group.
+                // This is only used for ensuring playmode-exclusive undo records are removed when existing playmode.
+                Undo.RecordObject(_guidComp, "Remove Orphaned Guid");
+                _guidComp.undoTriggerFlag = !_guidComp.undoTriggerFlag;
+
+                GuidManagerEditor.Unregister(orphanedGuid);
+            };
             labelFieldComponentGuid.contentContainer.Add(button);
 
             Image icon = new Image { image = EditorGUIUtility.IconContent("Error").image };
@@ -546,7 +555,6 @@ public class GuidComponentDrawer : Editor
             }
 
             serializedObject.Update();
-            EditorUtility.SetDirty(_guidComp);
         }
     }
 
@@ -658,6 +666,11 @@ public class GuidComponentDrawer : Editor
                         menu.AddItem(new GUIContent("Remove Guid Component"), false,
                             () =>
                             {
+                                // Hack: In order to mark the undo group as scene-dependent, we must modify a scene object into the undo group.
+                                // This is only used for ensuring playmode-exclusive undo records are removed when existing playmode.
+                                Undo.RecordObject(_guidComp, "Remove Guid Component");
+                                _guidComp.undoTriggerFlag = !_guidComp.undoTriggerFlag;
+
                                 _guidComp.RemoveAllComponentGuids();
                                 Undo.DestroyObjectImmediate(_guidComp);
                             });

@@ -71,8 +71,10 @@ public sealed class GuidMappings : ScriptableObject
             return _path;
         }
     }
+
     [SerializeField]
-    private SerializableDictionary<string, GuidRecord> _map = new SerializableDictionary<string, GuidRecord>();
+    private SerializableDictionary<string, GuidRecord> goGlobalIdToGuidMap =
+        new SerializableDictionary<string, GuidRecord>();
 
     public void Add(string transformKey, string componentKey, GuidItem guidItem, bool overwriteIfExists = false)
     {
@@ -84,10 +86,10 @@ public sealed class GuidMappings : ScriptableObject
 
         Undo.RecordObject(this, "Added GUID Mapping");
 
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             guidRecord = new GuidRecord();
-            _map.Add(transformKey, guidRecord);
+            goGlobalIdToGuidMap.Add(transformKey, guidRecord);
         }
 
         if (!string.IsNullOrEmpty(componentKey))
@@ -127,7 +129,7 @@ public sealed class GuidMappings : ScriptableObject
 
     internal void ClearTransformOrphaned(string transformKey)
     {
-        if (_map.TryGetValue(transformKey, out GuidRecord guidRecord) && guidRecord.transformOrphaned)
+        if (goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord) && guidRecord.transformOrphaned)
         {
             Undo.RecordObject(this, "Restoring Transform Guid");
             guidRecord.transformOrphaned = false;
@@ -145,7 +147,7 @@ public sealed class GuidMappings : ScriptableObject
 
         Undo.RecordObject(this, "Orphaning Guid");
 
-        if (_map.TryGetValue(transformGuidId, out GuidRecord guidRecord))
+        if (goGlobalIdToGuidMap.TryGetValue(transformGuidId, out GuidRecord guidRecord))
         {
             if (item != null)
             {
@@ -170,7 +172,7 @@ public sealed class GuidMappings : ScriptableObject
     {
         Undo.RecordObject(this, "Adopting Guid");
 
-        if (_map.TryGetValue(transformGlobalObjectId, out GuidRecord guidRecord))
+        if (goGlobalIdToGuidMap.TryGetValue(transformGlobalObjectId, out GuidRecord guidRecord))
         {
             if (guidRecord.orphanedGuids.Contains(guidItem))
             {
@@ -190,7 +192,7 @@ public sealed class GuidMappings : ScriptableObject
 
     public void RemoveOrphaned(string transformKey, SerializableGuid componentGuid)
     {
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return;
         }
@@ -211,7 +213,7 @@ public sealed class GuidMappings : ScriptableObject
 
     public void RemoveComponent(string transformKey, string componentKey)
     {
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return;
         }
@@ -229,7 +231,7 @@ public sealed class GuidMappings : ScriptableObject
 
     public void RemoveComponentByGuid(string transformKey, SerializableGuid componentGuid)
     {
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return;
         }
@@ -247,13 +249,13 @@ public sealed class GuidMappings : ScriptableObject
 
     public void RemoveRecord(string transformKey)
     {
-        if (!_map.ContainsKey(transformKey))
+        if (!goGlobalIdToGuidMap.ContainsKey(transformKey))
         {
             return;
         }
 
         Undo.RecordObject(this, "Remove GUID Mapping");
-        _map.Remove(transformKey);
+        goGlobalIdToGuidMap.Remove(transformKey);
         Save();
         EditorUtility.SetDirty(this);
     }
@@ -265,7 +267,7 @@ public sealed class GuidMappings : ScriptableObject
             return false;
         }
 
-        bool containsTransform = _map.TryGetValue(transformKey, out GuidRecord value);
+        bool containsTransform = goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord value);
         if (!string.IsNullOrEmpty(componentKey) && value != null)
         {
             return value.assignedGuids.Exists(g => g.globalObjectID == componentKey);
@@ -276,13 +278,13 @@ public sealed class GuidMappings : ScriptableObject
 
     public bool TryGetRecord(string transformKey, out GuidRecord guidRecord)
     {
-        return _map.TryGetValue(transformKey, out guidRecord);
+        return goGlobalIdToGuidMap.TryGetValue(transformKey, out guidRecord);
     }
 
     public bool TryGetByKey(string transformKey, string componentKey, out GuidItem guidItem)
     {
         guidItem = null;
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return false;
         }
@@ -294,7 +296,7 @@ public sealed class GuidMappings : ScriptableObject
     public bool TryGetByGuid(string transformKey, SerializableGuid componentGuid, out GuidItem guidItem)
     {
         guidItem = null;
-        if (!_map.TryGetValue(transformKey, out GuidRecord guidRecord))
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return false;
         }
@@ -320,16 +322,12 @@ public sealed class GuidMappings : ScriptableObject
         switch (stateChange)
         {
             case PlayModeStateChange.EnteredEditMode:
-                Debug.Log("Entered Editmode");
                 break;
             case PlayModeStateChange.ExitingEditMode:
-                Debug.Log("Exiting Editmode");
                 break;
             case PlayModeStateChange.EnteredPlayMode:
-                Debug.Log("Entered Playmode");
                 break;
             case PlayModeStateChange.ExitingPlayMode:
-                Debug.Log("Exiting Playmode");
                 LoadOrCreate();
                 break;
             default:
@@ -346,11 +344,11 @@ public sealed class GuidMappings : ScriptableObject
     [MenuItem("Tools/Guid Referencing/Reload Mappings")]
     private static void ReloadGuidMappings()
     {
-        DestroyImmediate(s_Instance);
         Undo.ClearUndo(s_Instance);
+        DestroyImmediate(s_Instance);
         LoadOrCreate();
 
-        Debug.Log("Cleared Guid Mappings");
+        Debug.Log("Reloaded Guid Mappings");
     }
 
     internal static void LoadOrCreate()
@@ -383,12 +381,12 @@ public sealed class GuidMappings : ScriptableObject
     private static void LoadFromJson<T>(string path, T objectInstance) where T : ScriptableObject
     {
         string json = File.ReadAllText(path);
-        EditorJsonUtility.FromJsonOverwrite(json, objectInstance);
+        JsonUtility.FromJsonOverwrite(json, objectInstance);
     }
 
     private static void SaveToJson(ScriptableObject obj, string path)
     {
-        string json = EditorJsonUtility.ToJson(obj, true);
+        string json = JsonUtility.ToJson(obj, true);
         File.WriteAllText(path, json);
     }
 
