@@ -289,7 +289,6 @@ public class GuidComponent : MonoBehaviour
         {
             transformGuid.serializableGuid = SerializableGuid.Create(Guid.NewGuid());
         }
-#endif
 
         if (componentGuid.CachedComponent is Transform)
         {
@@ -304,6 +303,7 @@ public class GuidComponent : MonoBehaviour
                 }
             }
         }
+#endif
     }
 
 #if UNITY_EDITOR
@@ -399,6 +399,21 @@ public class GuidComponent : MonoBehaviour
         if (IsAssetOnDisk())
         {
             return;
+        }
+
+        // This is a guard against duplication of GuidComponent. Duplication will copy all component values,
+        // so we need a way to detect this and reset the values of the duplicated component, to generate new GUIDs.
+        if (!didAwake)
+        {
+            // If the gameobject is duplicated the GlobalObjectIds won't match up, allowing us to detect a duplicate/collision
+            // and regenerate our GUIDs.
+            GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(transformGuid.OwningGameObject);
+            if (globalObjectID.ToString() != transformGuid.GlobalGameObjectId)
+            {
+                transformGuid = null;
+                componentGuids.Clear();
+                _componentGuidCandidates.Clear();
+            }
         }
 
         InitializeGuids();
