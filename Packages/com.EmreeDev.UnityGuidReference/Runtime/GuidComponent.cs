@@ -392,10 +392,7 @@ public class GuidComponent : MonoBehaviour
             return;
         }
 
-        Debug.Log("OnValidate()");
-
         InitializeGuids();
-
         componentGuids.RemoveAll(guid =>
         {
             bool isMissing = !guid.CachedComponent;
@@ -413,14 +410,13 @@ public class GuidComponent : MonoBehaviour
     // Let the manager know we are gone, so other objects no longer find this.
     public void OnDestroy()
     {
-#if UNITY_EDITOR
-        Debug.Log("OnDestroy()");
-#endif
+#if !UNITY_EDITOR
         GuidManager.Remove(transformGuid.serializableGuid.Guid);
         foreach (ComponentGuid componentGuid in componentGuids)
         {
             GuidManager.Remove(componentGuid.serializableGuid.Guid);
         }
+#endif
     }
 }
 

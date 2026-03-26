@@ -7,29 +7,29 @@ using UnityEngine;
 
 public sealed class GuidMappings : ScriptableObject
 {
-    private static GuidMappings s_Instance;
+    private static GuidMappings _instance;
     public static GuidMappings Instance
     {
         get
         {
-            if (s_Instance == null)
+            if (_instance == null)
             {
                 LoadOrCreate();
             }
 
-            return s_Instance;
+            return _instance;
         }
     }
 
     private GuidMappings()
     {
-        if (s_Instance != null)
+        if (_instance != null)
         {
             Debug.LogError("GuidMappings already exists. Did you query the singleton in a constructor?");
         }
         else
         {
-            s_Instance = this;
+            _instance = this;
         }
     }
 
@@ -107,23 +107,22 @@ public sealed class GuidMappings : ScriptableObject
                 }
 
                 Save();
-                EditorUtility.SetDirty(this);
             }
             else
             {
                 if (!guidRecord.assignedGuids.Exists(g => g.globalObjectID == componentKey))
                 {
                     guidRecord.assignedGuids.Add(guidItem);
+
                     Save();
-                    EditorUtility.SetDirty(this);
                 }
             }
         }
         else
         {
             guidRecord.transformGuid = guidItem;
+
             Save();
-            EditorUtility.SetDirty(this);
         }
     }
 
@@ -133,8 +132,8 @@ public sealed class GuidMappings : ScriptableObject
         {
             Undo.RecordObject(this, "Restoring Transform Guid");
             guidRecord.transformOrphaned = false;
+
             Save();
-            EditorUtility.SetDirty(this);
         }
     }
 
@@ -158,7 +157,6 @@ public sealed class GuidMappings : ScriptableObject
                     guidRecord.orphanedGuids.Add(item);
 
                     Save();
-                    EditorUtility.SetDirty(this);
                 }
             }
             else
@@ -181,8 +179,6 @@ public sealed class GuidMappings : ScriptableObject
                 guidRecord.assignedGuids.Add(guidItem);
 
                 Save();
-                EditorUtility.SetDirty(this);
-
                 return true;
             }
         }
@@ -204,8 +200,8 @@ public sealed class GuidMappings : ScriptableObject
             if (guidRecord.orphanedGuids[i].guid == componentGuid)
             {
                 guidRecord.orphanedGuids.RemoveAt(i);
+
                 Save();
-                EditorUtility.SetDirty(this);
                 return;
             }
         }
@@ -224,8 +220,8 @@ public sealed class GuidMappings : ScriptableObject
         if (idx >= 0)
         {
             guidRecord.assignedGuids.RemoveAt(idx);
+
             Save();
-            EditorUtility.SetDirty(this);
         }
     }
 
@@ -242,8 +238,8 @@ public sealed class GuidMappings : ScriptableObject
         if (idx >= 0)
         {
             guidRecord.assignedGuids.RemoveAt(idx);
+
             Save();
-            EditorUtility.SetDirty(this);
         }
     }
 
@@ -256,8 +252,8 @@ public sealed class GuidMappings : ScriptableObject
 
         Undo.RecordObject(this, "Remove GUID Mapping");
         goGlobalIdToGuidMap.Remove(transformKey);
+
         Save();
-        EditorUtility.SetDirty(this);
     }
 
     public bool Contains(string transformKey, string componentKey = "")
@@ -321,49 +317,38 @@ public sealed class GuidMappings : ScriptableObject
     {
         switch (stateChange)
         {
-            case PlayModeStateChange.EnteredEditMode:
-                break;
-            case PlayModeStateChange.ExitingEditMode:
-                break;
-            case PlayModeStateChange.EnteredPlayMode:
-                break;
             case PlayModeStateChange.ExitingPlayMode:
                 LoadOrCreate();
                 break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(stateChange), stateChange, null);
         }
     }
 
     private void UndoRedoPerformed()
     {
-        Debug.Log("Undo Saving...");
         Save();
     }
 
     [MenuItem("Tools/Guid Referencing/Reload Mappings")]
     private static void ReloadGuidMappings()
     {
-        Undo.ClearUndo(s_Instance);
-        DestroyImmediate(s_Instance);
+        Undo.ClearUndo(_instance);
+        DestroyImmediate(_instance);
         LoadOrCreate();
-
-        Debug.Log("Reloaded Guid Mappings");
     }
 
     internal static void LoadOrCreate()
     {
-        if (s_Instance == null)
+        if (_instance == null)
         {
             CreateInstance<GuidMappings>().hideFlags = HideFlags.HideAndDontSave;
         }
 
-        if (TryLoadAsset(s_Instance))
+        if (TryLoadAsset(_instance))
         {
             return;
         }
 
-        SaveToJson(s_Instance, AssetPath);
+        SaveToJson(_instance, AssetPath);
     }
 
     internal static bool TryLoadAsset(GuidMappings settings)
@@ -374,7 +359,6 @@ public sealed class GuidMappings : ScriptableObject
             return true;
         }
 
-        //
         return false;
     }
 
@@ -396,6 +380,7 @@ public sealed class GuidMappings : ScriptableObject
         if (!EditorApplication.isPlaying)
         {
             SaveToJson(this, AssetPath);
+            EditorUtility.SetDirty(this);
         }
     }
 }
