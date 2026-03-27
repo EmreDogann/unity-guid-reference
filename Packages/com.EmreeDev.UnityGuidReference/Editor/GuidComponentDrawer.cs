@@ -30,7 +30,13 @@ public class GuidComponentDrawer : Editor
         Transform parentForDraggedObjects,
         bool perform)
     {
-        return DragAndDropVisualMode.Rejected;
+        GuidComponent draggedObject = DragAndDrop.objectReferences[0] as GuidComponent;
+        if (draggedObject)
+        {
+            return DragAndDropVisualMode.Rejected;
+        }
+
+        return DragAndDropVisualMode.None;
     }
 
     // SerializedProperty here only used for remembering the state of foldout:
