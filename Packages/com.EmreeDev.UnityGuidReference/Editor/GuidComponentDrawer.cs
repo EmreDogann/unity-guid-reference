@@ -159,16 +159,6 @@ public class GuidComponentDrawer : Editor
             ObjectChangeKind type = stream.GetEventType(i);
             switch (type)
             {
-                case ObjectChangeKind.ChangeGameObjectStructureHierarchy: // Component order changed.
-                    stream.GetChangeGameObjectStructureHierarchyEvent(i,
-                        out ChangeGameObjectStructureHierarchyEventArgs hierarchyArgs);
-                    if (_guidComp && hierarchyArgs.instanceId == _guidComp.gameObject.GetInstanceID())
-                    {
-                        needsNotifyGuidComponent = true;
-                    }
-
-                    needsComponentListRebuilding = true;
-                    break;
                 case ObjectChangeKind.ChangeGameObjectStructure: // Component added/removed.
                     stream.GetChangeGameObjectStructureEvent(i,
                         out ChangeGameObjectStructureEventArgs structureArgs);
@@ -179,7 +169,7 @@ public class GuidComponentDrawer : Editor
 
                     needsComponentListRebuilding = true;
                     break;
-                case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // Properties changed.
+                case ObjectChangeKind.ChangeGameObjectOrComponentProperties: // Properties or component order changed.
                     needsComponentListRebuilding = true;
                     break;
             }
@@ -335,9 +325,7 @@ public class GuidComponentDrawer : Editor
         // Build Orphaned List
         // -------------------
 
-        var orphanedList = GuidManagerEditor.GetOrphanedGuids(_guidComp.transformGuid).ToList();
-
-        if (orphanedList.Count > 0)
+        if (_guidComp.orphanedComponentGuids.Count > 0)
         {
             VisualElement separator = new VisualElement
             {
@@ -348,8 +336,9 @@ public class GuidComponentDrawer : Editor
             parent.Add(separator);
         }
 
-        foreach (GuidMappings.OrphanedGuidItemInfo orphanedGuid in orphanedList)
+        foreach (ComponentGuid orphanedGuid in _guidComp.orphanedComponentGuids)
         {
+            Type orphanOwnerType = orphanedGuid.GetOwningType();
             string tooltip = "Orphaned: Cannot find owner.\nAssign new component or remove this guid.";
             VisualElement element = new VisualElement
             {
@@ -365,10 +354,8 @@ public class GuidComponentDrawer : Editor
             ObjectField objectFieldOrphanedGuid = new ObjectField
             {
                 tooltip = tooltip,
-                objectType = orphanedGuid.GuidItem.ownerType.Type
+                objectType = orphanOwnerType
             };
-
-            // SetupComponentPicker(objectFieldOrphanedGuid);
 
             objectFieldOrphanedGuid.name = "error-guid-orphaned-object-field";
 
@@ -376,7 +363,7 @@ public class GuidComponentDrawer : Editor
             {
                 Component draggedObject = DragAndDrop.objectReferences[0] as Component;
                 if (!draggedObject || !IsChildOf(draggedObject.gameObject, _guidComp.gameObject) ||
-                    draggedObject.GetType() != orphanedGuid.GuidItem.ownerType.Type ||
+                    draggedObject.GetType() != orphanOwnerType ||
                     _guidComp.GetGuid(draggedObject) != Guid.Empty)
                 {
                     DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
@@ -388,20 +375,10 @@ public class GuidComponentDrawer : Editor
             {
                 Component draggedObject = DragAndDrop.objectReferences[0] as Component;
                 if (draggedObject && IsChildOf(draggedObject.gameObject, _guidComp.gameObject) &&
-                    draggedObject.GetType() == orphanedGuid.GuidItem.ownerType.Type)
+                    draggedObject.GetType() == orphanOwnerType)
                 {
                     Undo.RecordObject(_guidComp, "Adopting Guid");
-                    ComponentGuid componentGuid = new ComponentGuid
-                    {
-                        CachedComponent = draggedObject,
-                        OwningGameObject = _guidComp.gameObject
-                    };
-
-                    if (GuidManagerEditor.AdoptGuid(orphanedGuid.GuidItem, componentGuid))
-                    {
-                        componentGuid.serializableGuid = orphanedGuid.GuidItem.guid;
-                        _guidComp.componentGuids.Add(componentGuid);
-                    }
+                    _guidComp.AdoptOrphanedGuid(orphanedGuid, draggedObject);
 
                     _guidComp.OnValidate();
                     serializedObject.Update();
@@ -437,7 +414,7 @@ public class GuidComponentDrawer : Editor
                 tooltip = tooltip
             };
             labelFieldComponentGuid.name = "error-guid-orphaned-label";
-            labelFieldComponentGuid.value = orphanedGuid.GuidItem.guid.ToString();
+            labelFieldComponentGuid.value = orphanedGuid.serializableGuid.ToString();
             labelFieldComponentGuid.AddToClassList("guid-component__guid-text-field");
 
             // Ugly hack so the label section is aligned, if label is empty it won't call the align functions.
@@ -463,12 +440,8 @@ public class GuidComponentDrawer : Editor
 
             button.clickable.clicked += () =>
             {
-                // Hack: In order to mark the undo group as scene-dependent, we must modify a scene object into the undo group.
-                // This is only used for ensuring playmode-exclusive undo records are removed when existing playmode.
                 Undo.RecordObject(_guidComp, "Remove Orphaned Guid");
-                _guidComp.undoTriggerFlag = !_guidComp.undoTriggerFlag;
-
-                GuidManagerEditor.Unregister(orphanedGuid);
+                _guidComp.RemoveOrphanedGuid(orphanedGuid);
             };
             labelFieldComponentGuid.contentContainer.Add(button);
 
@@ -482,13 +455,13 @@ public class GuidComponentDrawer : Editor
     }
 
     private void SetupComponentPicker(ObjectField objectField,
-        GuidMappings.OrphanedGuidItemInfo orphanedGuidInfo)
+        ComponentGuid orphanedGuid)
     {
         SearchProvider searchProvider = new SearchProvider("local_components", "Local Components")
         {
             showDetailsOptions = ShowDetailsOptions.None,
             fetchItems = (context, items, provider) =>
-                ComponentPickerFetchItemsHandler(context, provider, objectField, orphanedGuidInfo),
+                ComponentPickerFetchItemsHandler(context, provider, objectField, orphanedGuid),
             fetchThumbnail = (item, context) => item.thumbnail,
             fetchLabel = (item, context) => item.label,
             fetchDescription = (item, searchContext) => item.description,
@@ -518,20 +491,21 @@ public class GuidComponentDrawer : Editor
 
     private class ObjectSearchPayload
     {
-        public GuidMappings.OrphanedGuidItemInfo OrphanedGuidInfo;
+        public ComponentGuid OrphanedGuid;
         public Component Component;
         public ObjectField ObjectField;
     }
 
     private IEnumerable<SearchItem> ComponentPickerFetchItemsHandler(SearchContext searchContext,
         SearchProvider searchProvider, ObjectField objectField,
-        GuidMappings.OrphanedGuidItemInfo orphanedGuidInfo)
+        ComponentGuid orphanedGuid)
     {
         if (_guidComp.gameObject == null)
         {
             yield break;
         }
 
+        Type orphanOwnerType = orphanedGuid.GetOwningType();
         int index = 0;
         foreach (Component component in _guidComp.GetComponentGuidCandidates())
         {
@@ -541,7 +515,7 @@ public class GuidComponentDrawer : Editor
             }
 
             if (_guidComp.componentGuids.Exists(guid => guid.CachedComponent == component) ||
-                component.GetType() != orphanedGuidInfo.GuidItem.ownerType.Type)
+                component.GetType() != orphanOwnerType)
             {
                 continue;
             }
@@ -551,7 +525,7 @@ public class GuidComponentDrawer : Editor
                 component.GetType().Name,
                 (Texture2D)EditorGUIUtility.ObjectContent(null, component.GetType()).image,
                 new ObjectSearchPayload
-                    { Component = component, OrphanedGuidInfo = orphanedGuidInfo, ObjectField = objectField });
+                    { Component = component, OrphanedGuid = orphanedGuid, ObjectField = objectField });
         }
     }
 
@@ -566,17 +540,8 @@ public class GuidComponentDrawer : Editor
         if (searchItem is { data: ObjectSearchPayload searchPayload } && searchPayload.Component != null)
         {
             Undo.RecordObject(_guidComp, "Adopting Guid");
-            ComponentGuid componentGuid = new ComponentGuid
-            {
-                CachedComponent = searchPayload.Component,
-                OwningGameObject = _guidComp.gameObject
-            };
-
-            if (GuidManagerEditor.AdoptGuid(searchPayload.OrphanedGuidInfo.GuidItem, componentGuid))
-            {
-                componentGuid.serializableGuid = searchPayload.OrphanedGuidInfo.GuidItem.guid;
-                _guidComp.componentGuids.Add(componentGuid);
-            }
+            _guidComp.AdoptOrphanedGuid(searchPayload.OrphanedGuid, searchPayload.Component);
+            _guidComp.OnValidate();
 
             serializedObject.Update();
         }
@@ -690,12 +655,14 @@ public class GuidComponentDrawer : Editor
                         menu.AddItem(new GUIContent("Remove Guid Component"), false,
                             () =>
                             {
-                                // Hack: In order to mark the undo group as scene-dependent, we must modify a scene object into the undo group.
-                                // This is only used for ensuring playmode-exclusive undo records are removed when existing playmode.
-                                Undo.RecordObject(_guidComp, "Remove Guid Component");
-                                _guidComp.undoTriggerFlag = !_guidComp.undoTriggerFlag;
+                                if (!EditorUtility.DisplayDialog(
+                                        "Remove Guid Component",
+                                        "Removing GuidComponent will permanently lose all GUIDs assigned to this GameObject. This cannot be undone after saving.\n\nAre you sure you want to continue?",
+                                        "Remove", "Cancel"))
+                                {
+                                    return;
+                                }
 
-                                _guidComp.RemoveAllComponentGuids();
                                 Undo.DestroyObjectImmediate(_guidComp);
                             });
                     }

@@ -24,16 +24,14 @@ public class GuidComponent : MonoBehaviour
     [SerializeField] internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
+    [SerializeField] internal List<ComponentGuid> orphanedComponentGuids = new List<ComponentGuid>();
+
     private readonly List<Component> _componentGuidCandidates = new List<Component>();
 
     public static event Func<ComponentGuid, SerializableGuid> OnGuidRequested;
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
-
-    // Hack: Incremented before editor operations that only modify GuidMappings (i.e. Removing/Unregistering Guids in GuidManagerEditor).
-    // Creates a real serialized change so Unity includes this undo group in play mode cleanup.
-    [SerializeField] [HideInInspector]
-    internal bool undoTriggerFlag;
+    public static event Action<GuidComponent> OnGuidComponentDestroying;
 
     private static bool _isQuitting;
 
@@ -43,17 +41,22 @@ public class GuidComponent : MonoBehaviour
         if (componentGuid != null)
         {
             componentGuids.Remove(componentGuid);
+            orphanedComponentGuids.Add(componentGuid);
             OnGuidRemoved?.Invoke(componentGuid);
         }
     }
 
-    internal void RemoveAllComponentGuids()
+    internal void RemoveOrphanedGuid(ComponentGuid orphan)
     {
-        OnGuidRemoved?.Invoke(transformGuid);
-        foreach (ComponentGuid componentGuid in componentGuids)
-        {
-            OnGuidRemoved?.Invoke(componentGuid);
-        }
+        orphanedComponentGuids.Remove(orphan);
+    }
+
+    internal void AdoptOrphanedGuid(ComponentGuid orphan, Component newOwner)
+    {
+        orphanedComponentGuids.Remove(orphan);
+        orphan.CachedComponent = newOwner;
+        orphan.OwningGameObject = gameObject;
+        componentGuids.Add(orphan);
     }
 #endif
 
@@ -338,6 +341,45 @@ public class GuidComponent : MonoBehaviour
         bool isEditingInPrefabMode = IsEditingInPrefabMode();
         return isPrefabAsset || isEditingInPrefabMode;
     }
+
+    private bool IsDuplicate()
+    {
+        if (string.IsNullOrEmpty(transformGuid.GlobalGameObjectId))
+        {
+            return false;
+        }
+
+        if (!GlobalObjectId.TryParse(transformGuid.GlobalGameObjectId, out GlobalObjectId storedId))
+        {
+            return false;
+        }
+
+        Object resolvedObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(storedId);
+        return resolvedObject != null && resolvedObject != gameObject;
+    }
+
+    private void RefreshGlobalObjectIds()
+    {
+        GlobalObjectId goId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
+        string newGoId = goId.ToString();
+
+        transformGuid.GlobalGameObjectId = newGoId;
+
+        foreach (ComponentGuid compGuid in componentGuids)
+        {
+            compGuid.GlobalGameObjectId = newGoId;
+            if (compGuid.CachedComponent)
+            {
+                GlobalObjectId compId = GlobalObjectId.GetGlobalObjectIdSlow(compGuid.CachedComponent);
+                compGuid.GlobalComponentId = compId.ToString();
+            }
+        }
+
+        foreach (ComponentGuid orphan in orphanedComponentGuids)
+        {
+            orphan.GlobalGameObjectId = newGoId;
+        }
+    }
 #endif
 
     private void InitializeGuids()
@@ -401,18 +443,26 @@ public class GuidComponent : MonoBehaviour
             return;
         }
 
-        // This is a guard against duplication of GuidComponent. Duplication will copy all component values,
-        // so we need a way to detect this and reset the values of the duplicated component, to generate new GUIDs.
-        if (!didAwake)
+        if (transformGuid != null)
         {
-            // If the gameobject is duplicated the GlobalObjectIds won't match up, allowing us to detect a duplicate/collision
-            // and regenerate our GUIDs.
-            GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(transformGuid.OwningGameObject);
+            GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
             if (globalObjectID.ToString() != transformGuid.GlobalGameObjectId)
             {
-                transformGuid = null;
-                componentGuids.Clear();
-                _componentGuidCandidates.Clear();
+                // This is a guard against duplication of GuidComponent. Duplication will copy all component values,
+                // so we need a way to detect this and reset the values of the duplicated component, to generate new GUIDs.
+                if (IsDuplicate())
+                {
+                    transformGuid = null;
+                    componentGuids.Clear();
+                    orphanedComponentGuids.Clear();
+                    _componentGuidCandidates.Clear();
+                }
+                else
+                {
+                    // Same object with a changed GlobalObjectId (e.g. prefab instance unpacked).
+                    // Refresh stored IDs to match the new format, keeping existing GUIDs.
+                    RefreshGlobalObjectIds();
+                }
             }
         }
 
@@ -422,12 +472,12 @@ public class GuidComponent : MonoBehaviour
             bool isMissing = !guid.CachedComponent;
             if (isMissing)
             {
+                orphanedComponentGuids.Add(guid);
                 OnGuidRemoved?.Invoke(guid);
             }
 
             return isMissing;
         });
-        componentGuids = componentGuids.OrderBy(guid => guid.CachedComponent.GetComponentIndex()).ToList();
     }
 #endif
 
@@ -435,14 +485,13 @@ public class GuidComponent : MonoBehaviour
     public void OnDestroy()
     {
 #if UNITY_EDITOR
-        // Only want to orphan guids when the user themselves has removed the component, either directly or indirectly via gameobject deletion.
         if (IsAssetOnDisk() || _isQuitting || EditorApplication.isPlayingOrWillChangePlaymode ||
             !gameObject.scene.isLoaded)
         {
             return;
         }
 
-        RemoveAllComponentGuids();
+        OnGuidComponentDestroying?.Invoke(this);
 #else
         GuidManager.Remove(transformGuid.serializableGuid.Guid);
         foreach (ComponentGuid componentGuid in componentGuids)
@@ -487,6 +536,11 @@ public class ComponentGuid : IEquatable<ComponentGuid>
                 Debug.LogError(
                     "[GuidComponent] Error: ComponentGuids can only be created for scene game objects! Setting to empty.");
                 GlobalComponentId = string.Empty;
+            }
+
+            if (value)
+            {
+                cachedOwnerTypeReference = value.GetType().FullName + ", " + value.GetType().Assembly.GetName().Name;
             }
 #endif
         }
@@ -539,6 +593,11 @@ public class ComponentGuid : IEquatable<ComponentGuid>
         internal set => globalComponentId = value;
     }
 
+    [SerializeField] [HideInInspector]
+    private string cachedOwnerTypeReference = string.Empty;
+    public Type CachedOwnerType =>
+        !string.IsNullOrEmpty(cachedOwnerTypeReference) ? Type.GetType(cachedOwnerTypeReference) : null;
+
     public bool IsRootComponent()
     {
         return !string.IsNullOrEmpty(globalGameObjectId) && string.IsNullOrEmpty(globalComponentId);
@@ -551,7 +610,7 @@ public class ComponentGuid : IEquatable<ComponentGuid>
             return typeof(GameObject);
         }
 
-        return cachedComponent ? cachedComponent.GetType() : null;
+        return cachedComponent ? cachedComponent.GetType() : CachedOwnerType;
     }
 #endif
 
