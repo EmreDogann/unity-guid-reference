@@ -50,6 +50,8 @@ public sealed class GuidMappings : ScriptableObject
     private SerializableDictionary<string, GuidRecord> goGlobalIdToGuidMap =
         new SerializableDictionary<string, GuidRecord>();
 
+    public IEnumerable<KeyValuePair<string, GuidRecord>> Records => goGlobalIdToGuidMap;
+
     public void Cache(string transformKey, string componentKey, GuidItem guidItem)
     {
         if (string.IsNullOrEmpty(transformKey))
@@ -109,6 +111,31 @@ public sealed class GuidMappings : ScriptableObject
         }
     }
 
+    public void RefreshMapping(string oldTransformKey, string newTransformKey,
+        IEnumerable<(string oldComponentKey, string newComponentKey)> componentKeys)
+    {
+        // We want this Undo record to be invisible, as this is a side effect of something like prefab unpacking.
+        Undo.RecordObject(this, Undo.GetCurrentGroupName());
+
+        if (!goGlobalIdToGuidMap.Remove(oldTransformKey, out GuidRecord guidRecord))
+        {
+            return;
+        }
+
+        goGlobalIdToGuidMap.Add(newTransformKey, guidRecord);
+        guidRecord.transformGuid.globalObjectID = newTransformKey;
+
+        foreach ((string oldComponentKey, string newComponentKey) keys in componentKeys)
+        {
+            GuidItem componentGuidItem =
+                guidRecord.assignedGuids.Find(g => g.globalObjectID == keys.oldComponentKey);
+            if (componentGuidItem != null)
+            {
+                componentGuidItem.globalObjectID = keys.newComponentKey;
+            }
+        }
+    }
+
     public void RemoveComponent(string transformKey, string componentKey)
     {
         if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
@@ -150,22 +177,6 @@ public sealed class GuidMappings : ScriptableObject
 
         Undo.RecordObject(this, "Remove GUID Mapping");
         goGlobalIdToGuidMap.Remove(transformKey);
-    }
-
-    public bool Contains(string transformKey, string componentKey = "")
-    {
-        if (string.IsNullOrEmpty(transformKey))
-        {
-            return false;
-        }
-
-        bool containsTransform = goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord value);
-        if (!string.IsNullOrEmpty(componentKey) && value != null)
-        {
-            return value.assignedGuids.Exists(g => g.globalObjectID == componentKey);
-        }
-
-        return containsTransform;
     }
 
     public bool TryGetRecord(string transformKey, out GuidRecord guidRecord)
@@ -222,8 +233,7 @@ public sealed class GuidMappings : ScriptableObject
         }
     }
 
-    [MenuItem("Tools/Guid Referencing/Rebuild Mappings")]
-    private static void RebuildGuidMappings()
+    internal static void RebuildGuidMappings()
     {
         Undo.ClearUndo(_instance);
         Instance.Clear();

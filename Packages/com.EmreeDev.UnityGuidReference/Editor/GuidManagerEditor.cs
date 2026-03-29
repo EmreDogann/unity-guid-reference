@@ -1,5 +1,8 @@
 using System;
+using System.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
 
 [InitializeOnLoad]
 public class GuidManagerEditor
@@ -134,5 +137,89 @@ public class GuidManagerEditor
 
         GuidComponent.OnGuidComponentDestroying -= OnGuidComponentDestroying;
         GuidComponent.OnGuidComponentDestroying += OnGuidComponentDestroying;
+
+        EditorApplication.quitting -= OnEditorQuitting;
+        EditorApplication.quitting += OnEditorQuitting;
+
+        PrefabUtility.prefabInstanceUnpacked -= PrefabUnpacked;
+        PrefabUtility.prefabInstanceUnpacked += PrefabUnpacked;
+
+        PrefabUtility.prefabInstanceUpdated -= PrefabInstanceUpdated;
+        PrefabUtility.prefabInstanceUpdated += PrefabInstanceUpdated;
+
+        PrefabStage.prefabStageClosing -= PrefabStageClosing;
+        PrefabStage.prefabStageClosing += PrefabStageClosing;
+    }
+
+    private static void PrefabInstanceUpdated(GameObject instance)
+    {
+        // PREFAB-1: Removing Components from the prefab asset will not call it's OnDestroy() function on
+        // prefab instances. We need to clean up ourselves.
+        if (!instance.GetComponent<GuidComponent>())
+        {
+            GlobalObjectId gameObjectId = GlobalObjectId.GetGlobalObjectIdSlow(instance);
+            GetMappings().RemoveRecord(gameObjectId.ToString());
+        }
+    }
+
+    private static void PrefabStageClosing(PrefabStage obj)
+    {
+        // PREFAB-2: PrefabUtility.GetPrefabStage() doesn't work when exiting prefab stage, it returns null because
+        // it calls the GuidComponent's OnDestroy function after it has cleaned-up.
+        Debug.Log("Prefab Stage Closing");
+        GuidComponent.IsPrefabStageClosing = true;
+        EditorApplication.delayCall += () => GuidComponent.IsPrefabStageClosing = false;
+    }
+
+    private static void PrefabUnpacked(GameObject unpackedGameObject, PrefabUnpackMode unpackMode)
+    {
+        // PREFAB-3: Unpacking a prefab instance will change its GlobalObjectId.
+        // So, we need to refresh stored IDs to match the new format, while keeping existing GUIDs.
+
+        switch (unpackMode)
+        {
+            case PrefabUnpackMode.OutermostRoot:
+            {
+                RefreshIds(unpackedGameObject.GetComponent<GuidComponent>());
+                break;
+            }
+            case PrefabUnpackMode.Completely:
+            {
+                foreach (GuidComponent component in unpackedGameObject.GetComponentsInChildren<GuidComponent>(true))
+                {
+                    RefreshIds(component);
+                }
+
+                break;
+            }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(unpackMode), unpackMode, null);
+        }
+
+        return;
+
+        void RefreshIds(GuidComponent component)
+        {
+            if (component != null)
+            {
+                string prevGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
+                var prevGlobalComponentIds =
+                    component.componentGuids.Select(guid => guid.GlobalComponentId);
+
+                component.RefreshGlobalObjectIds();
+
+                string currentGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
+                var currentGlobalComponentIds =
+                    component.componentGuids.Select(guid => guid.GlobalComponentId);
+
+                GetMappings().RefreshMapping(prevGlobalGameObjectId, currentGlobalGameObjectId,
+                    prevGlobalComponentIds.Zip(currentGlobalComponentIds, (s, s1) => (s, s1)));
+            }
+        }
+    }
+
+    private static void OnEditorQuitting()
+    {
+        GuidComponent.IsQuitting = true;
     }
 }

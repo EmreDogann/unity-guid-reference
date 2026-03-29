@@ -5,7 +5,6 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 #if UNITY_EDITOR
 using UnityEditor;
-using UnityEditor.SceneManagement;
 #endif
 
 /// <summary>
@@ -15,48 +14,35 @@ using UnityEditor.SceneManagement;
 /// </summary>
 [ExecuteAlways] [DisallowMultipleComponent]
 public class GuidComponent : MonoBehaviour
+#if UNITY_EDITOR
+    , ISerializationCallbackReceiver
+#endif
 {
     private static readonly Type GameObjectType = typeof(GameObject);
 
     [SerializeField]
-    internal ComponentGuid transformGuid;
+    internal ComponentGuid transformGuid = new ComponentGuid();
 
     [SerializeField] internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
     [SerializeField] internal List<ComponentGuid> orphanedComponentGuids = new List<ComponentGuid>();
 
-    private readonly List<Component> _componentGuidCandidates = new List<Component>();
-
     public static event Func<ComponentGuid, SerializableGuid> OnGuidRequested;
     public static event Action<ComponentGuid> OnCacheGuid;
     public static event Action<ComponentGuid> OnGuidRemoved;
     public static event Action<GuidComponent> OnGuidComponentDestroying;
 
-    private static bool _isQuitting;
+    internal static bool IsQuitting;
+    // See PREFAB-2 comment in GuidManagerEditor.PrefabStageClosing().
+    internal static bool IsPrefabStageClosing;
+    [NonSerialized]
+    private bool _isInitializedAndReady;
 
-    // Purely for GuidComponentDrawer as external classes cannot invoke 'event' specified Actions.
-    internal void RemoveComponentGuid(ComponentGuid componentGuid)
+    // Purely for GuidComponentDrawer, as external classes cannot invoke 'event' Actions.
+    internal void NotifyGuidRemoved(ComponentGuid componentGuid)
     {
-        if (componentGuid != null)
-        {
-            componentGuids.Remove(componentGuid);
-            orphanedComponentGuids.Add(componentGuid);
-            OnGuidRemoved?.Invoke(componentGuid);
-        }
-    }
-
-    internal void RemoveOrphanedGuid(ComponentGuid orphan)
-    {
-        orphanedComponentGuids.Remove(orphan);
-    }
-
-    internal void AdoptOrphanedGuid(ComponentGuid orphan, Component newOwner)
-    {
-        orphanedComponentGuids.Remove(orphan);
-        orphan.CachedComponent = newOwner;
-        orphan.OwningGameObject = gameObject;
-        componentGuids.Add(orphan);
+        OnGuidRemoved?.Invoke(componentGuid);
     }
 #endif
 
@@ -159,12 +145,14 @@ public class GuidComponent : MonoBehaviour
 
     public IReadOnlyList<ComponentGuid> GetComponentGuids()
     {
-        return componentGuids;
-    }
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
 
-    public IReadOnlyList<Component> GetComponentGuidCandidates()
-    {
-        return _componentGuidCandidates;
+        return componentGuids;
     }
 
     /// <summary>
@@ -174,6 +162,13 @@ public class GuidComponent : MonoBehaviour
     /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf(Type T)
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         return componentGuids.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf(T)).Count > 1;
     }
 
@@ -184,6 +179,13 @@ public class GuidComponent : MonoBehaviour
     /// <returns>True if there are multiple components of the same type. False if not.</returns>
     public bool HasMultipleComponentsOf<T>() where T : Component
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         return componentGuids.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf<T>()).Count > 1;
     }
 
@@ -193,6 +195,13 @@ public class GuidComponent : MonoBehaviour
     /// <returns>Guid of the GameObject. Guid.Empty if not found.</returns>
     public Guid GetGuid()
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         if (transformGuid.serializableGuid.Equals(SerializableGuid.Empty))
         {
             return SerializableGuid.Empty.Guid;
@@ -209,6 +218,13 @@ public class GuidComponent : MonoBehaviour
     /// <returns>Guid of the Component. Guid.Empty if not found.</returns>
     public Guid GetGuid(Type type)
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         if (type == GameObjectType)
         {
             return GetGuid();
@@ -229,6 +245,13 @@ public class GuidComponent : MonoBehaviour
     /// <param name="component">The component which you want to find the guid of.</param>
     public Guid GetGuid(Component component)
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         if (component is GuidComponent)
         {
             return transformGuid.serializableGuid.Guid;
@@ -250,6 +273,13 @@ public class GuidComponent : MonoBehaviour
     /// <returns>If found, returns the Component, otherwise null.</returns>
     public Component GetComponentFromGuid(Guid guid)
     {
+#if UNITY_EDITOR
+        if (!_isInitializedAndReady)
+        {
+            OnValidate();
+        }
+#endif
+
         SerializableGuid serializableGuid = SerializableGuid.Create(guid);
         if (guid != transformGuid.serializableGuid.Guid)
         {
@@ -277,6 +307,7 @@ public class GuidComponent : MonoBehaviour
         else
         {
             Undo.RecordObject(this, "Restoring Component Guid");
+            PrefabUtility.RecordPrefabInstancePropertyModifications(this);
             Debug.Log(
                 $"Requesting mapped or new {(componentGuid.CachedComponent ? componentGuid.CachedComponent.GetType() + " " : "")}Guid...");
             // If we don't have a cached guid, then try find in mapping file. Whether found or not, this will fill this component's guid.
@@ -309,60 +340,71 @@ public class GuidComponent : MonoBehaviour
 #endif
     }
 
+    private void InitializeGuids()
+    {
+        transformGuid ??= new ComponentGuid();
+        transformGuid.OwningGameObject = gameObject;
+
+        FindOrCreateGuid(transformGuid);
+        foreach (ComponentGuid componentGuid in componentGuids)
+        {
+            FindOrCreateGuid(componentGuid);
+        }
+    }
+
+    private void Awake()
+    {
+#if !UNITY_EDITOR
+        FindOrCreateGuid(transformGuid);
+        foreach (ComponentGuid componentGuid in componentGuids)
+        {
+            FindOrCreateGuid(componentGuid);
+        }
+#endif
+    }
+
 #if UNITY_EDITOR
-    private bool IsEditingInPrefabMode()
+    internal class CachedEntityId : ScriptableObject
     {
-        if (EditorUtility.IsPersistent(this))
-        {
-            // If the game object is stored on disk, it is a prefab of some kind, despite not returning true for IsPartOfPrefabAsset =/
-            return true;
-        }
+        // Used for OnAfterDeserialize as the gameObject getter is not safe to call in there.
+        public EntityId componentEntityId;
+        public EntityId gameObjectEntityId;
+    }
 
-        // If the GameObject is not persistent let's determine which stage we are in first because getting Prefab info depends on it
-        StageHandle mainStage = StageUtility.GetMainStageHandle();
-        StageHandle currentStage = StageUtility.GetStageHandle(gameObject);
-        PrefabStage prefabStage;
-        if (currentStage != mainStage)
+    // Used for detecting duplicates.
+    [SerializeField]
+    private CachedEntityId cachedEntityId;
+
+    public void OnBeforeSerialize() {}
+
+    public void OnAfterDeserialize()
+    {
+        // This is needed in edge cases such as:
+        //   - User calls Object.Instantiate() on an object containing this Component.
+        //     This clones the Component without calling it's OnValidate() function, and Awake/OnEnable functions
+        //     are dependent on if the gameobject is active, so this is the most reliable way to ensure the GUID is
+        //     always valid when duplicated/cloned.
+        if (cachedEntityId && cachedEntityId.componentEntityId != GetEntityId())
         {
-            prefabStage = PrefabStageUtility.GetPrefabStage(gameObject);
-            if (prefabStage)
+            _isInitializedAndReady = false;
+            EditorApplication.delayCall += () =>
             {
-                return true;
-            }
+                // If the component was setup while this delayCall was queued
+                // (maybe the user calls it's public functions immediately afterwards),
+                // then we don't need to setup.
+                if (!_isInitializedAndReady)
+                {
+                    OnValidate();
+                }
+            };
         }
-
-        prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-        return prefabStage && prefabStage.IsPartOfPrefabContents(gameObject);
     }
 
-    internal bool IsAssetOnDisk()
-    {
-        bool isPrefabAsset = PrefabUtility.IsPartOfPrefabAsset(this);
-        bool isEditingInPrefabMode = IsEditingInPrefabMode();
-        return isPrefabAsset || isEditingInPrefabMode;
-    }
-
-    private bool IsDuplicate()
-    {
-        if (string.IsNullOrEmpty(transformGuid.GlobalGameObjectId))
-        {
-            return false;
-        }
-
-        if (!GlobalObjectId.TryParse(transformGuid.GlobalGameObjectId, out GlobalObjectId storedId))
-        {
-            return false;
-        }
-
-        Object resolvedObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(storedId);
-        return resolvedObject != null && resolvedObject != gameObject;
-    }
-
-    private void RefreshGlobalObjectIds()
+    // Only used when unpacking prefab instances, as that will change GlobalObjectIds
+    internal void RefreshGlobalObjectIds()
     {
         GlobalObjectId goId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
         string newGoId = goId.ToString();
-
         transformGuid.GlobalGameObjectId = newGoId;
 
         foreach (ComponentGuid compGuid in componentGuids)
@@ -380,90 +422,62 @@ public class GuidComponent : MonoBehaviour
             orphan.GlobalGameObjectId = newGoId;
         }
     }
-#endif
 
-    private void InitializeGuids()
+    private bool HasGuidData()
     {
-        if (transformGuid == null)
-        {
-            transformGuid = new ComponentGuid();
-        }
-
-        transformGuid.OwningGameObject = gameObject;
-
-        FindOrCreateGuid(transformGuid);
-
-        _componentGuidCandidates.Clear();
-        // Look for new components on the GameObject. Exclude component types specified in GuidComponentExcluders.
-        foreach (Component component in gameObject.GetComponents<Component>())
-        {
-            if (GuidComponentExcluders.Excluders.Contains(component.GetType()))
-            {
-                continue;
-            }
-
-            GlobalObjectId componentGlobalObjectId = GlobalObjectId.GetGlobalObjectIdSlow(component);
-
-            ComponentGuid componentGuid =
-                componentGuids.FirstOrDefault(c => c.GlobalComponentId.Equals(componentGlobalObjectId.ToString()));
-            if (componentGuid == null)
-            {
-                _componentGuidCandidates.Add(component);
-            }
-            else
-            {
-                FindOrCreateGuid(componentGuid);
-            }
-        }
+        return transformGuid != null && transformGuid.serializableGuid != SerializableGuid.Empty ||
+               componentGuids.Count > 0 || orphanedComponentGuids.Count > 0;
     }
 
-    private void Awake()
+    private void ResetValues()
     {
-#if UNITY_EDITOR
-        EditorApplication.quitting += OnEditorQuitting;
-#else
-        FindOrCreateGuid(transformGuid);
-        foreach (ComponentGuid componentGuid in componentGuids)
-        {
-            FindOrCreateGuid(componentGuid);
-        }
-#endif
-    }
-
-#if UNITY_EDITOR
-    private void OnEditorQuitting()
-    {
-        _isQuitting = true;
+        transformGuid = new ComponentGuid();
+        componentGuids.Clear();
+        orphanedComponentGuids.Clear();
     }
 
     internal void OnValidate()
     {
-        if (IsAssetOnDisk())
+        if (PrefabCheckerUtility.IsPartOfAnyPrefab(this) &&
+            !PrefabCheckerUtility.IsPartOfValidPrefabInstance(this) &&
+            (PrefabCheckerUtility.IsPartOfPrefabAssetOnly(this) || PrefabCheckerUtility.IsInPrefabStage(this)))
         {
+            // If component is part of prefab asset, set its values to null.
+            if (HasGuidData())
+            {
+                ResetValues();
+                if (cachedEntityId)
+                {
+                    DestroyImmediate(cachedEntityId);
+                }
+            }
+
+            _isInitializedAndReady = true;
             return;
         }
 
-        if (transformGuid != null)
+        if (!cachedEntityId)
         {
-            GlobalObjectId globalObjectID = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
-            if (globalObjectID.ToString() != transformGuid.GlobalGameObjectId)
-            {
-                // This is a guard against duplication of GuidComponent. Duplication will copy all component values,
-                // so we need a way to detect this and reset the values of the duplicated component, to generate new GUIDs.
-                if (IsDuplicate())
-                {
-                    transformGuid = null;
-                    componentGuids.Clear();
-                    orphanedComponentGuids.Clear();
-                    _componentGuidCandidates.Clear();
-                }
-                else
-                {
-                    // Same object with a changed GlobalObjectId (e.g. prefab instance unpacked).
-                    // Refresh stored IDs to match the new format, keeping existing GUIDs.
-                    RefreshGlobalObjectIds();
-                }
-            }
+            cachedEntityId = ScriptableObject.CreateInstance<CachedEntityId>();
+            cachedEntityId.hideFlags = HideFlags.HideAndDontSave | HideFlags.HideInInspector;
+        }
+
+        if (cachedEntityId.gameObjectEntityId == EntityId.None)
+        {
+            cachedEntityId.gameObjectEntityId = gameObject.GetEntityId();
+            cachedEntityId.componentEntityId = GetEntityId();
+        }
+
+        // This is a guard against duplication of GuidComponent. Duplication will copy all component values,
+        // so we need a way to detect this and reset the values of the duplicated component, to generate new GUIDs.
+        if (cachedEntityId.gameObjectEntityId != gameObject.GetEntityId())
+        {
+            ResetValues();
+
+            cachedEntityId = ScriptableObject.CreateInstance<CachedEntityId>();
+            cachedEntityId.hideFlags = HideFlags.HideAndDontSave | HideFlags.HideInInspector;
+            cachedEntityId.gameObjectEntityId = gameObject.GetEntityId();
+            cachedEntityId.componentEntityId = GetEntityId();
         }
 
         InitializeGuids();
@@ -478,6 +492,8 @@ public class GuidComponent : MonoBehaviour
 
             return isMissing;
         });
+
+        _isInitializedAndReady = true;
     }
 #endif
 
@@ -485,13 +501,25 @@ public class GuidComponent : MonoBehaviour
     public void OnDestroy()
     {
 #if UNITY_EDITOR
-        if (IsAssetOnDisk() || _isQuitting || EditorApplication.isPlayingOrWillChangePlaymode ||
-            !gameObject.scene.isLoaded)
+        if (PrefabCheckerUtility.IsPartOfPrefabAssetOnly(this) ||
+            PrefabCheckerUtility.IsInPrefabStage(this) || IsPrefabStageClosing ||
+            IsQuitting || EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            return;
+        }
+
+        // Prefab instance: keep GuidMappings record for potential revert
+        if (PrefabCheckerUtility.IsPartOfAnyPrefab(this) &&
+            PrefabCheckerUtility.IsPartOfValidPrefabInstance(this))
         {
             return;
         }
 
         OnGuidComponentDestroying?.Invoke(this);
+        if (cachedEntityId)
+        {
+            Undo.DestroyObjectImmediate(cachedEntityId);
+        }
 #else
         GuidManager.Remove(transformGuid.serializableGuid.Guid);
         foreach (ComponentGuid componentGuid in componentGuids)
@@ -502,16 +530,17 @@ public class GuidComponent : MonoBehaviour
     }
 }
 
+
 /// <summary>
 ///     Stores GUIDs for a cachedComponent on a GameObject
 /// </summary>
 [Serializable]
 public class ComponentGuid : IEquatable<ComponentGuid>
 {
-    [SerializeField] [HideInInspector]
+    [SerializeField]
     public SerializableGuid serializableGuid;
 
-    [SerializeField] [HideInInspector]
+    [SerializeField]
     private Component cachedComponent;
     public Component CachedComponent
     {
@@ -531,8 +560,10 @@ public class ComponentGuid : IEquatable<ComponentGuid>
             {
                 GlobalComponentId = globalObjectID.ToString();
             }
-            else
+            else if (globalObjectID.identifierType != 0)
             {
+                // identifierType 0 = Null/transient (e.g. mid-prefab reimport) — skip silently,
+                // the existing GlobalComponentId remains valid.
                 Debug.LogError(
                     "[GuidComponent] Error: ComponentGuids can only be created for scene game objects! Setting to empty.");
                 GlobalComponentId = string.Empty;
@@ -546,7 +577,7 @@ public class ComponentGuid : IEquatable<ComponentGuid>
         }
     }
 
-    [SerializeField] [HideInInspector]
+    [SerializeField]
     private GameObject owningGameObject;
     public GameObject OwningGameObject
     {
@@ -566,8 +597,10 @@ public class ComponentGuid : IEquatable<ComponentGuid>
             {
                 GlobalGameObjectId = globalObjectID.ToString();
             }
-            else
+            else if (globalObjectID.identifierType != 0)
             {
+                // identifierType 0 = Null/transient (e.g. mid-prefab reimport) — skip silently,
+                // the existing GlobalGameObjectId remains valid.
                 Debug.LogError(
                     "[GuidComponent] Error: ComponentGuids can only be created for scene game objects! Setting to empty.");
                 GlobalGameObjectId = string.Empty;
@@ -577,7 +610,7 @@ public class ComponentGuid : IEquatable<ComponentGuid>
     }
 
 #if UNITY_EDITOR
-    [SerializeField] [HideInInspector]
+    [SerializeField]
     private string globalGameObjectId = string.Empty;
     public string GlobalGameObjectId
     {
@@ -585,7 +618,7 @@ public class ComponentGuid : IEquatable<ComponentGuid>
         internal set => globalGameObjectId = value;
     }
 
-    [SerializeField] [HideInInspector]
+    [SerializeField]
     private string globalComponentId = string.Empty;
     public string GlobalComponentId
     {

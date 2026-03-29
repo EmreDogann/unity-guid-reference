@@ -42,6 +42,8 @@ public class GuidComponentDrawer : Editor
     // SerializedProperty here only used for remembering the state of foldout:
     // https://discussions.unity.com/t/editorguilayout-foldout-no-way-to-remember-state/36422/6
     private SerializedProperty _transformGuidProp;
+    private SerializedProperty _componentGuidsProp;
+    private SerializedProperty _orphanedGuidsProp;
 
     public override VisualElement CreateInspectorGUI()
     {
@@ -63,6 +65,8 @@ public class GuidComponentDrawer : Editor
         root.RegisterCallback<DetachFromPanelEvent>(_ => ObjectChangeEvents.changesPublished -= ChangesPublished);
 
         _transformGuidProp = serializedObject.FindProperty(nameof(GuidComponent.transformGuid));
+        _componentGuidsProp = serializedObject.FindProperty(nameof(GuidComponent.componentGuids));
+        _orphanedGuidsProp = serializedObject.FindProperty(nameof(GuidComponent.orphanedComponentGuids));
         _guidComp = (GuidComponent)serializedObject.targetObject;
 
         CreateHeaderGUI(root);
@@ -72,7 +76,7 @@ public class GuidComponentDrawer : Editor
             return root;
         }
 
-        if (_guidComp.IsAssetOnDisk())
+        if (PrefabCheckerUtility.IsPartOfPrefabAssetOnly(_guidComp) || PrefabCheckerUtility.IsInPrefabStage(_guidComp))
         {
             HelpBox helpBox = new HelpBox(
                 "Guid Components do not work in prefab assets.\nHowever, instances of prefabs in a scene will receive the correct guid information.",
@@ -116,7 +120,9 @@ public class GuidComponentDrawer : Editor
 
             root.Add(element);
 
-            if (_guidComp.GetComponentGuids().Count > 0 || _guidComp.GetComponentGuidCandidates().Count > 0)
+            // "-2" will account for the two components we always know will be present, but do not want to check for,
+            // those being: Transform & GuidComponent
+            if (_guidComp.GetComponentGuids().Count > 0 || _guidComp.gameObject.GetComponentCount() - 2 > 0)
             {
                 Foldout foldout = new Foldout
                 {
@@ -189,6 +195,7 @@ public class GuidComponentDrawer : Editor
     private void RebuildGuidList(VisualElement parent)
     {
         _componentGUIDsContainer.Clear();
+        var assignedGuids = new List<Component>();
 
         // -------------------
         // Build Assigned List
@@ -201,6 +208,8 @@ public class GuidComponentDrawer : Editor
             {
                 continue;
             }
+
+            assignedGuids.Add(componentGuid.CachedComponent);
 
             VisualElement element = new VisualElement
             {
@@ -240,11 +249,17 @@ public class GuidComponentDrawer : Editor
 
             button.clickable.clicked += () =>
             {
-                Undo.RecordObject(_guidComp, "Orphaning Guid from Component");
-                _guidComp.RemoveComponentGuid(componentGuid);
-
-                _guidComp.OnValidate();
                 serializedObject.Update();
+
+                int idx = FindComponentGuidIndex(_componentGuidsProp, componentGuid);
+                if (idx >= 0)
+                {
+                    MoveArrayElement(_componentGuidsProp, idx, _orphanedGuidsProp);
+
+                    serializedObject.ApplyModifiedProperties();
+                    Undo.SetCurrentGroupName("Orphan Guid from Component");
+                    _guidComp.NotifyGuidRemoved(componentGuid);
+                }
             };
             labelFieldComponentGuid.contentContainer.Add(button);
 
@@ -258,13 +273,13 @@ public class GuidComponentDrawer : Editor
         // Build Candidate/Available List
         // ------------------------------
 
-        foreach (Component component in _guidComp.GetComponentGuidCandidates())
-        {
-            if (!component)
-            {
-                continue;
-            }
+        var candidateGuids = _guidComp.GetComponents<Component>().ToList();
+        candidateGuids.RemoveAll(component =>
+            GuidComponentExcluders.Excluders.Contains(component.GetType()) || assignedGuids.Contains(component));
 
+        // Look for new components on the GameObject. Exclude component types specified in GuidComponentExcluders.
+        foreach (Component component in candidateGuids)
+        {
             VisualElement element = new VisualElement
             {
                 style = { flexDirection = FlexDirection.Row }
@@ -297,15 +312,16 @@ public class GuidComponentDrawer : Editor
 
             button.clickable.clicked += () =>
             {
-                Undo.RecordObject(_guidComp, "Assigning Guid to Component");
-                _guidComp.componentGuids.Add(new ComponentGuid
-                {
-                    CachedComponent = component,
-                    OwningGameObject = _guidComp.gameObject
-                });
-
-                _guidComp.OnValidate();
                 serializedObject.Update();
+
+                int newIndex = _componentGuidsProp.arraySize;
+                _componentGuidsProp.InsertArrayElementAtIndex(newIndex);
+                SetAdoptionFields(
+                    _componentGuidsProp.GetArrayElementAtIndex(newIndex),
+                    component, _guidComp.gameObject);
+
+                serializedObject.ApplyModifiedProperties();
+                Undo.SetCurrentGroupName("Assign Guid to Component");
             };
 
             element.Add(icon);
@@ -377,11 +393,19 @@ public class GuidComponentDrawer : Editor
                 if (draggedObject && IsChildOf(draggedObject.gameObject, _guidComp.gameObject) &&
                     draggedObject.GetType() == orphanOwnerType)
                 {
-                    Undo.RecordObject(_guidComp, "Adopting Guid");
-                    _guidComp.AdoptOrphanedGuid(orphanedGuid, draggedObject);
-
-                    _guidComp.OnValidate();
                     serializedObject.Update();
+
+                    int idx = FindComponentGuidIndex(_orphanedGuidsProp, orphanedGuid);
+                    if (idx >= 0)
+                    {
+                        MoveArrayElement(_orphanedGuidsProp, idx, _componentGuidsProp);
+                        SetAdoptionFields(
+                            _componentGuidsProp.GetArrayElementAtIndex(_componentGuidsProp.arraySize - 1),
+                            draggedObject, _guidComp.gameObject);
+
+                        serializedObject.ApplyModifiedProperties();
+                        Undo.SetCurrentGroupName("Adopt Orphaned Guid");
+                    }
 
                     evt.StopImmediatePropagation();
                 }
@@ -440,8 +464,16 @@ public class GuidComponentDrawer : Editor
 
             button.clickable.clicked += () =>
             {
-                Undo.RecordObject(_guidComp, "Remove Orphaned Guid");
-                _guidComp.RemoveOrphanedGuid(orphanedGuid);
+                serializedObject.Update();
+
+                int idx = FindComponentGuidIndex(_orphanedGuidsProp, orphanedGuid);
+                if (idx >= 0)
+                {
+                    _orphanedGuidsProp.DeleteArrayElementAtIndex(idx);
+
+                    serializedObject.ApplyModifiedProperties();
+                    Undo.SetCurrentGroupName("Remove Orphaned Guid");
+                }
             };
             labelFieldComponentGuid.contentContainer.Add(button);
 
@@ -452,6 +484,92 @@ public class GuidComponentDrawer : Editor
 
             parent.Add(element);
         }
+    }
+
+    private static int FindComponentGuidIndex(SerializedProperty arrayProp, ComponentGuid target)
+    {
+        for (int i = 0; i < arrayProp.arraySize; i++)
+        {
+            SerializedProperty element = arrayProp.GetArrayElementAtIndex(i);
+            SerializedProperty guidProp = element.FindPropertyRelative("serializableGuid");
+            if ((SerializableGuid)guidProp.boxedValue == target.serializableGuid)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static void CopyComponentGuidProperties(SerializedProperty source, SerializedProperty dest)
+    {
+        SerializedProperty dstGuid = dest.FindPropertyRelative("serializableGuid");
+        dstGuid.boxedValue = source.FindPropertyRelative("serializableGuid").boxedValue;
+
+        dest.FindPropertyRelative("cachedComponent").objectReferenceValue =
+            source.FindPropertyRelative("cachedComponent").objectReferenceValue;
+        dest.FindPropertyRelative("owningGameObject").objectReferenceValue =
+            source.FindPropertyRelative("owningGameObject").objectReferenceValue;
+        dest.FindPropertyRelative("globalGameObjectId").stringValue =
+            source.FindPropertyRelative("globalGameObjectId").stringValue;
+        dest.FindPropertyRelative("globalComponentId").stringValue =
+            source.FindPropertyRelative("globalComponentId").stringValue;
+        dest.FindPropertyRelative("cachedOwnerTypeReference").stringValue =
+            source.FindPropertyRelative("cachedOwnerTypeReference").stringValue;
+    }
+
+    private static void MoveArrayElement(SerializedProperty sourceArray, int sourceIndex,
+        SerializedProperty destArray)
+    {
+        SerializedProperty source = sourceArray.GetArrayElementAtIndex(sourceIndex);
+        int destIndex = destArray.arraySize;
+        destArray.InsertArrayElementAtIndex(destIndex);
+
+        SerializedProperty dest = destArray.GetArrayElementAtIndex(destIndex);
+        CopyComponentGuidProperties(source, dest);
+        sourceArray.DeleteArrayElementAtIndex(sourceIndex);
+    }
+
+    // Duplicate logic from ComponentGuid.CachedComponent & ComponentGuid.OwningGameObject property setters to work
+    // within the SerializedObject flow for Undo/Redo, Prefab modifications, etc.
+    // Annoying I have to duplicate this logic, but it's recommended to work with SerializedObject's in custom editors.
+    private static void SetAdoptionFields(SerializedProperty elementProp, Component newOwner,
+        GameObject owningGameObject)
+    {
+        elementProp.FindPropertyRelative("serializableGuid").boxedValue = SerializableGuid.Empty;
+        elementProp.FindPropertyRelative("cachedComponent").objectReferenceValue = newOwner;
+        elementProp.FindPropertyRelative("owningGameObject").objectReferenceValue = owningGameObject;
+
+        GlobalObjectId componentId = GlobalObjectId.GetGlobalObjectIdSlow(newOwner);
+        if (componentId.identifierType == 2)
+        {
+            elementProp.FindPropertyRelative("globalComponentId").stringValue = componentId.ToString();
+        }
+        else if (componentId.identifierType != 0)
+        {
+            // identifierType 0 = Null/transient (e.g. mid-prefab reimport) — skip silently,
+            // the existing GlobalComponentId remains valid.
+            Debug.LogError(
+                "[GuidComponent] Error: ComponentGuids can only be created for scene game objects! Setting to empty.");
+            elementProp.FindPropertyRelative("globalComponentId").stringValue = string.Empty;
+        }
+
+        GlobalObjectId gameObjectId = GlobalObjectId.GetGlobalObjectIdSlow(owningGameObject);
+        if (gameObjectId.identifierType == 2)
+        {
+            elementProp.FindPropertyRelative("globalGameObjectId").stringValue = gameObjectId.ToString();
+        }
+        else if (gameObjectId.identifierType != 0)
+        {
+            // identifierType 0 = Null/transient (e.g. mid-prefab reimport) — skip silently,
+            // the existing GlobalComponentId remains valid.
+            Debug.LogError(
+                "[GuidComponent] Error: ComponentGuids can only be created for scene game objects! Setting to empty.");
+            elementProp.FindPropertyRelative("globalGameObjectId").stringValue = string.Empty;
+        }
+
+        elementProp.FindPropertyRelative("cachedOwnerTypeReference").stringValue =
+            newOwner.GetType().FullName + ", " + newOwner.GetType().Assembly.GetName().Name;
     }
 
     private void SetupComponentPicker(ObjectField objectField,
@@ -507,7 +625,7 @@ public class GuidComponentDrawer : Editor
 
         Type orphanOwnerType = orphanedGuid.GetOwningType();
         int index = 0;
-        foreach (Component component in _guidComp.GetComponentGuidCandidates())
+        foreach (Component component in _guidComp.GetComponents<Component>())
         {
             if (GuidComponentExcluders.Excluders.Contains(component.GetType()))
             {
@@ -539,11 +657,19 @@ public class GuidComponentDrawer : Editor
 
         if (searchItem is { data: ObjectSearchPayload searchPayload } && searchPayload.Component != null)
         {
-            Undo.RecordObject(_guidComp, "Adopting Guid");
-            _guidComp.AdoptOrphanedGuid(searchPayload.OrphanedGuid, searchPayload.Component);
-            _guidComp.OnValidate();
-
             serializedObject.Update();
+
+            int idx = FindComponentGuidIndex(_orphanedGuidsProp, searchPayload.OrphanedGuid);
+            if (idx >= 0)
+            {
+                MoveArrayElement(_orphanedGuidsProp, idx, _componentGuidsProp);
+                SetAdoptionFields(
+                    _componentGuidsProp.GetArrayElementAtIndex(_componentGuidsProp.arraySize - 1),
+                    searchPayload.Component, _guidComp.gameObject);
+
+                serializedObject.ApplyModifiedProperties();
+                Undo.SetCurrentGroupName("Adopt Orphaned Guid");
+            }
         }
     }
 
