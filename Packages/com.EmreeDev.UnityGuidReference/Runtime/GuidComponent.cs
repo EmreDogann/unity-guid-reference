@@ -20,17 +20,22 @@ public class GuidComponent : MonoBehaviour
 {
     private static readonly Type GameObjectType = typeof(GameObject);
 
-    [SerializeField]
+    [SerializeField] [HideInInspector]
     internal ComponentGuid transformGuid = new ComponentGuid();
 
-    [SerializeField] internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
+    [SerializeField] [HideInInspector]
+    internal List<ComponentGuid> componentGuids = new List<ComponentGuid>();
 
 #if UNITY_EDITOR
-    [SerializeField] internal List<ComponentGuid> orphanedComponentGuids = new List<ComponentGuid>();
+    [SerializeField] [HideInInspector]
+    internal List<ComponentGuid> orphanedComponentGuids = new List<ComponentGuid>();
 
     public static event Func<ComponentGuid, SerializableGuid> OnGuidRequested;
+    public static event Action<GuidComponent> OnReconcileComponentGuids;
     public static event Action<ComponentGuid> OnCacheGuid;
+    public static event Action<ComponentGuid> OnCacheOrphan;
     public static event Action<ComponentGuid> OnGuidRemoved;
+    public static event Action<ComponentGuid> OnOrphanRemoved;
     public static event Action<GuidComponent> OnGuidComponentDestroying;
 
     internal static bool IsQuitting;
@@ -43,6 +48,11 @@ public class GuidComponent : MonoBehaviour
     internal void NotifyGuidRemoved(ComponentGuid componentGuid)
     {
         OnGuidRemoved?.Invoke(componentGuid);
+    }
+
+    internal void NotifyOrphanRemoved(ComponentGuid componentGuid)
+    {
+        OnOrphanRemoved?.Invoke(componentGuid);
     }
 #endif
 
@@ -301,15 +311,17 @@ public class GuidComponent : MonoBehaviour
 #if UNITY_EDITOR
         if (componentGuid.serializableGuid != SerializableGuid.Empty)
         {
+#if GUID_DEBUG
             Debug.Log("Found Cached Guid!");
+#endif
             OnCacheGuid?.Invoke(componentGuid);
         }
         else
         {
-            Undo.RecordObject(this, "Restoring Component Guid");
-            PrefabUtility.RecordPrefabInstancePropertyModifications(this);
+#if GUID_DEBUG
             Debug.Log(
                 $"Requesting mapped or new {(componentGuid.CachedComponent ? componentGuid.CachedComponent.GetType() + " " : "")}Guid...");
+#endif
             // If we don't have a cached guid, then try find in mapping file. Whether found or not, this will fill this component's guid.
             if (OnGuidRequested != null)
             {
@@ -346,10 +358,20 @@ public class GuidComponent : MonoBehaviour
         transformGuid.OwningGameObject = gameObject;
 
         FindOrCreateGuid(transformGuid);
+
         foreach (ComponentGuid componentGuid in componentGuids)
         {
             FindOrCreateGuid(componentGuid);
         }
+
+        foreach (ComponentGuid orphan in orphanedComponentGuids)
+        {
+            OnCacheOrphan?.Invoke(orphan);
+        }
+
+        // Always reconcile: restore entries from GuidMappings that are missing from componentGuids/orphanedComponentGuids.
+        // Handles serialized data wipes from paste/revert/reset. No-op when everything is in sync.
+        OnReconcileComponentGuids?.Invoke(this);
     }
 
     private void Awake()
@@ -372,7 +394,7 @@ public class GuidComponent : MonoBehaviour
     }
 
     // Used for detecting duplicates.
-    [SerializeField]
+    [SerializeField] [HideInInspector]
     private CachedEntityId cachedEntityId;
 
     public void OnBeforeSerialize() {}
@@ -403,13 +425,12 @@ public class GuidComponent : MonoBehaviour
     // Only used when unpacking prefab instances, as that will change GlobalObjectIds
     internal void RefreshGlobalObjectIds()
     {
-        GlobalObjectId goId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
-        string newGoId = goId.ToString();
-        transformGuid.GlobalGameObjectId = newGoId;
+        string gameObjectId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject).ToString();
+        transformGuid.GlobalGameObjectId = gameObjectId;
 
         foreach (ComponentGuid compGuid in componentGuids)
         {
-            compGuid.GlobalGameObjectId = newGoId;
+            compGuid.GlobalGameObjectId = gameObjectId;
             if (compGuid.CachedComponent)
             {
                 GlobalObjectId compId = GlobalObjectId.GetGlobalObjectIdSlow(compGuid.CachedComponent);
@@ -419,7 +440,7 @@ public class GuidComponent : MonoBehaviour
 
         foreach (ComponentGuid orphan in orphanedComponentGuids)
         {
-            orphan.GlobalGameObjectId = newGoId;
+            orphan.GlobalGameObjectId = gameObjectId;
         }
     }
 
@@ -630,6 +651,29 @@ public class ComponentGuid : IEquatable<ComponentGuid>
     private string cachedOwnerTypeReference = string.Empty;
     public Type CachedOwnerType =>
         !string.IsNullOrEmpty(cachedOwnerTypeReference) ? Type.GetType(cachedOwnerTypeReference) : null;
+
+    internal string CachedOwnerTypeReference => cachedOwnerTypeReference;
+
+    internal void SetCachedOwnerTypeReference(string typeRef)
+    {
+        cachedOwnerTypeReference = typeRef;
+    }
+
+    public ComponentGuid() {}
+
+    public ComponentGuid(string gameObjectId, GameObject gameObject, string componentId, Component component)
+    {
+        globalGameObjectId = gameObjectId;
+        globalComponentId = componentId;
+        owningGameObject = gameObject;
+        cachedComponent = component;
+
+        if (cachedComponent)
+        {
+            cachedOwnerTypeReference = cachedComponent.GetType().FullName + ", " +
+                                       cachedComponent.GetType().Assembly.GetName().Name;
+        }
+    }
 
     public bool IsRootComponent()
     {

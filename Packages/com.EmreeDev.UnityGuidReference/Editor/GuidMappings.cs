@@ -36,7 +36,15 @@ public sealed class GuidMappings : ScriptableObject
     public class GuidItem
     {
         public string globalObjectID;
+        public Component cachedComponent;
         public SerializableGuid guid;
+    }
+
+    [Serializable]
+    public class OrphanGuidItem
+    {
+        public SerializableGuid guid;
+        public string ownerTypeReference;
     }
 
     [Serializable]
@@ -44,13 +52,14 @@ public sealed class GuidMappings : ScriptableObject
     {
         public GuidItem transformGuid;
         public List<GuidItem> assignedGuids = new List<GuidItem>();
+        public List<OrphanGuidItem> orphanedGuids = new List<OrphanGuidItem>();
     }
 
     [SerializeField]
     private SerializableDictionary<string, GuidRecord> goGlobalIdToGuidMap =
         new SerializableDictionary<string, GuidRecord>();
 
-    public IEnumerable<KeyValuePair<string, GuidRecord>> Records => goGlobalIdToGuidMap;
+    internal IEnumerable<KeyValuePair<string, GuidRecord>> Records => goGlobalIdToGuidMap;
 
     public void Cache(string transformKey, string componentKey, GuidItem guidItem)
     {
@@ -60,6 +69,7 @@ public sealed class GuidMappings : ScriptableObject
             return;
         }
 
+        Undo.RecordObject(this, "Cache GUID Mapping");
         InsertMapping(transformKey, componentKey, guidItem, false);
     }
 
@@ -177,6 +187,67 @@ public sealed class GuidMappings : ScriptableObject
 
         Undo.RecordObject(this, "Remove GUID Mapping");
         goGlobalIdToGuidMap.Remove(transformKey);
+    }
+
+    public void CacheOrphan(string transformKey, OrphanGuidItem item)
+    {
+        if (string.IsNullOrEmpty(transformKey))
+        {
+            Debug.LogError("[GuidMappings] Error: transformKey must have a valid GlobalObjectID!");
+            return;
+        }
+
+        Undo.RecordObject(this, "Cache Orphan GUID Mapping");
+        InsertOrphan(transformKey, item, false);
+    }
+
+    public void AddOrphan(string transformKey, OrphanGuidItem item)
+    {
+        if (string.IsNullOrEmpty(transformKey))
+        {
+            Debug.LogError("[GuidMappings] Error: transformKey must have a valid GlobalObjectID!");
+            return;
+        }
+
+        Undo.RecordObject(this, "Added Orphan GUID Mapping");
+        InsertOrphan(transformKey, item, false);
+    }
+
+    private void InsertOrphan(string transformKey, OrphanGuidItem item, bool overwriteIfExists)
+    {
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
+        {
+            guidRecord = new GuidRecord();
+            goGlobalIdToGuidMap.Add(transformKey, guidRecord);
+        }
+
+        int idx = guidRecord.orphanedGuids.FindIndex(g => g.guid == item.guid);
+        if (idx >= 0)
+        {
+            if (overwriteIfExists)
+            {
+                guidRecord.orphanedGuids[idx] = item;
+            }
+        }
+        else
+        {
+            guidRecord.orphanedGuids.Add(item);
+        }
+    }
+
+    public void RemoveOrphan(string transformKey, SerializableGuid orphanGuid)
+    {
+        if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
+        {
+            return;
+        }
+
+        int idx = guidRecord.orphanedGuids.FindIndex(g => g.guid == orphanGuid);
+        if (idx >= 0)
+        {
+            Undo.RecordObject(this, "Remove Orphan GUID Mapping");
+            guidRecord.orphanedGuids.RemoveAt(idx);
+        }
     }
 
     public bool TryGetRecord(string transformKey, out GuidRecord guidRecord)
