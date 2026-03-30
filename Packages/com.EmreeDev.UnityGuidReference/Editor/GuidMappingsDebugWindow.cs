@@ -20,7 +20,6 @@ public class GuidMappingsDebugWindow : EditorWindow
         public ItemKind Kind;
         public string Label;
         public string Guid;
-        public string GlobalObjectId;
     }
 
     private TreeView _treeView;
@@ -214,8 +213,7 @@ public class GuidMappingsDebugWindow : EditorWindow
                     {
                         Kind = ItemKind.ComponentGuid,
                         Label = ResolveComponentTypeName(guidItem.globalObjectID),
-                        Guid = guidItem.guid.ToString(),
-                        GlobalObjectId = guidItem.globalObjectID
+                        Guid = guidItem.guid.ToString()
                     }));
             }
 
@@ -238,8 +236,7 @@ public class GuidMappingsDebugWindow : EditorWindow
                 new TreeItemData
                 {
                     Kind = ItemKind.Record,
-                    Label = gameObjectName,
-                    GlobalObjectId = transformKey
+                    Label = gameObjectName
                 }, children));
         }
 
