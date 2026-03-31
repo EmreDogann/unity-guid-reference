@@ -529,13 +529,6 @@ public class GuidComponent : MonoBehaviour
             return;
         }
 
-        // Prefab instance: keep GuidMappings record for potential revert
-        if (PrefabCheckerUtility.IsPartOfAnyPrefab(this) &&
-            PrefabCheckerUtility.IsPartOfValidPrefabInstance(this))
-        {
-            return;
-        }
-
         OnGuidComponentDestroying?.Invoke(this);
         if (cachedEntityId)
         {
