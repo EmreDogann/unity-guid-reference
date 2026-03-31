@@ -230,11 +230,21 @@ public class GuidManagerEditor
         if (!needsRestore)
         {
             // Clean up stale orphans: remove from GuidMappings if guid was adopted
-            foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids.ToList())
+            List<SerializableGuid> staleOrphans = null;
+            foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids)
             {
                 if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid))
                 {
-                    GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, orphan.guid);
+                    staleOrphans ??= new List<SerializableGuid>();
+                    staleOrphans.Add(orphan.guid);
+                }
+            }
+
+            if (staleOrphans != null)
+            {
+                foreach (SerializableGuid guid in staleOrphans)
+                {
+                    GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, guid);
                 }
             }
 
@@ -265,11 +275,21 @@ public class GuidManagerEditor
         }
 
         // Clean up stale orphans: remove from GuidMappings if guid was adopted
-        foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids.ToList())
+        List<SerializableGuid> staleOrphansPostRestore = null;
+        foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids)
         {
             if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid))
             {
-                GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, orphan.guid);
+                staleOrphansPostRestore ??= new List<SerializableGuid>();
+                staleOrphansPostRestore.Add(orphan.guid);
+            }
+        }
+
+        if (staleOrphansPostRestore != null)
+        {
+            foreach (SerializableGuid guid in staleOrphansPostRestore)
+            {
+                GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, guid);
             }
         }
     }

@@ -179,7 +179,16 @@ public class GuidComponent : MonoBehaviour
         }
 #endif
 
-        return componentGuids.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf(T)).Count > 1;
+        int count = 0;
+        foreach (ComponentGuid componentGuid in componentGuids)
+        {
+            if (componentGuid.IsTypeOrSubclassOf(T) && ++count > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -196,7 +205,16 @@ public class GuidComponent : MonoBehaviour
         }
 #endif
 
-        return componentGuids.FindAll(componentGuid => componentGuid.IsTypeOrSubclassOf<T>()).Count > 1;
+        int count = 0;
+        foreach (ComponentGuid componentGuid in componentGuids)
+        {
+            if (componentGuid.IsTypeOrSubclassOf<T>() && ++count > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
