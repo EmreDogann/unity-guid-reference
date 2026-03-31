@@ -811,6 +811,27 @@ public class GuidComponentDrawer : Editor
 
                     void CustomContextMenuItems(GenericMenu menu)
                     {
+                        if (PrefabUtility.IsPartOfPrefabInstance(_guidComp.gameObject) &&
+                            PrefabUtility.IsAddedComponentOverride(_guidComp))
+                        {
+                            string assetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(_guidComp);
+                            string assetName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+
+                            menu.AddItem(new GUIContent($"Added Component/Apply to Prefab '{assetName}'"),
+                                false, () =>
+                                {
+                                    PrefabUtility.ApplyAddedComponent(_guidComp, assetPath,
+                                        InteractionMode.UserAction);
+                                });
+
+                            menu.AddItem(new GUIContent("Added Component/Revert"), false, () =>
+                            {
+                                PrefabUtility.RevertAddedComponent(_guidComp, InteractionMode.UserAction);
+                            });
+
+                            menu.AddSeparator("");
+                        }
+
                         menu.AddItem(new GUIContent("Remove Guid Component"), false,
                             () =>
                             {

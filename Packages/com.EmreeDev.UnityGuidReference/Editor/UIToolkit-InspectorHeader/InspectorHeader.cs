@@ -29,6 +29,8 @@ public class InspectorHeader : VisualElement
     private readonly DrawSettings _drawSettings;
     private readonly Action<GenericMenu, Rect, Object[], int> _showDefaultContextMenu;
     private readonly Action<GenericMenu> _customContextMenu;
+    private VisualElement _prefabOverrideBar;
+    private Image _prefabOverlayIcon;
 
     public InspectorHeader(SerializedObject serializedObject, InspectorElement inspectorElement,
         IMGUIContainer footer, DrawSettings drawSettings = null)
@@ -63,6 +65,25 @@ public class InspectorHeader : VisualElement
         _drawSettings = drawSettings;
 
         AssignObject();
+
+        RegisterCallback<AttachToPanelEvent>(AttachPrefabCallback);
+
+        RegisterCallback<DetachFromPanelEvent>(DetachPrefabCallback);
+
+        return;
+
+        void AttachPrefabCallback(AttachToPanelEvent _)
+        {
+            if (_prefabOverrideBar != null || _prefabOverlayIcon != null)
+            {
+                PrefabUtility.prefabInstanceUpdated += OnPrefabInstanceUpdated;
+            }
+        }
+
+        void DetachPrefabCallback(DetachFromPanelEvent _)
+        {
+            PrefabUtility.prefabInstanceUpdated -= OnPrefabInstanceUpdated;
+        }
     }
 
     /// <summary>
@@ -77,8 +98,6 @@ public class InspectorHeader : VisualElement
     {
         focusable = true;
         delegatesFocus = true;
-
-        StyleSheetUtility.ApplyCurrentTheme(this);
 
         Object target = serializedObject.targetObject;
         // TODO: HideFlags.NotEditable
@@ -115,6 +134,7 @@ public class InspectorHeader : VisualElement
             }
         });
 
+        AddPrefabOverrideBar(headerContainer, target);
         AddPrelabelHeaderElements(headerContainer, serializedObject, drawSettings);
         AddHeaderLabel(headerContainer, serializedObject, drawSettings);
         AddPostlabelHeaderElements(headerContainer, serializedObject, drawSettings);
@@ -158,9 +178,16 @@ public class InspectorHeader : VisualElement
     {
         if (drawSettings.DrawIcon)
         {
+            VisualElement iconContainer = new VisualElement();
+            iconContainer.AddToClassList(StyleSheetUtility.InspectorHeaderIconContainerUssClassName);
+
             Image icon = new Image { image = AssetPreview.GetMiniThumbnail(serializedObject.targetObject) };
             icon.AddToClassList(StyleSheetUtility.InspectorHeaderIconUssClassName);
-            header.Add(icon);
+            iconContainer.Add(icon);
+
+            AddPrefabOverlayIcon(iconContainer, serializedObject.targetObject);
+
+            header.Add(iconContainer);
         }
 
         Toggle toggle = new Toggle();
@@ -265,6 +292,78 @@ public class InspectorHeader : VisualElement
                 ShowInspectorContextMenu(settings.worldBound, header, serializedObject, drawSettings);
             header.Add(settings);
         }
+    }
+
+    private void AddPrefabOverrideBar(VisualElement header, Object target)
+    {
+        if (target is not Component component)
+        {
+            return;
+        }
+
+        if (!PrefabUtility.IsPartOfPrefabInstance(component.gameObject))
+        {
+            return;
+        }
+
+        if (!PrefabUtility.IsAddedComponentOverride(component))
+        {
+            return;
+        }
+
+        _prefabOverrideBar = new VisualElement();
+        _prefabOverrideBar.AddToClassList(StyleSheetUtility.InspectorHeaderPrefabOverrideBarUssClassName);
+        header.Add(_prefabOverrideBar);
+    }
+
+    private void AddPrefabOverlayIcon(VisualElement iconContainer, Object target)
+    {
+        if (target is not Component component)
+        {
+            return;
+        }
+
+        if (!PrefabUtility.IsPartOfPrefabInstance(component.gameObject))
+        {
+            return;
+        }
+
+        if (!PrefabUtility.IsAddedComponentOverride(component))
+        {
+            return;
+        }
+
+        GUIContent content = EditorGUIUtility.IconContent("PrefabOverlayAdded Icon");
+        if (content?.image == null)
+        {
+            return;
+        }
+
+        _prefabOverlayIcon = new Image { image = content.image };
+        _prefabOverlayIcon.AddToClassList(StyleSheetUtility.InspectorHeaderIconOverlayUssClassName);
+        iconContainer.Add(_prefabOverlayIcon);
+    }
+
+    private void OnPrefabInstanceUpdated(GameObject instance)
+    {
+        Object target = _backingObject?.targetObject;
+        if (target is not Component component || component == null)
+        {
+            return;
+        }
+
+        if (PrefabUtility.IsAddedComponentOverride(component))
+        {
+            return;
+        }
+
+        _prefabOverrideBar?.RemoveFromHierarchy();
+        _prefabOverrideBar = null;
+
+        _prefabOverlayIcon?.RemoveFromHierarchy();
+        _prefabOverlayIcon = null;
+
+        PrefabUtility.prefabInstanceUpdated -= OnPrefabInstanceUpdated;
     }
 
     /// <summary>

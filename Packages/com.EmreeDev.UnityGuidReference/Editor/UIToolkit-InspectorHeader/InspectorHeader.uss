@@ -8,6 +8,7 @@
 }
 
 .uitk-inspector__header {
+    position: relative;
     flex-direction: row;
     align-items: center;
     padding-left: 4px;
@@ -18,12 +19,22 @@
     background-color: var(--unity-colors-inspector_titlebar-background);
 }
 
+/* Blue bar on the left edge for added component overrides on prefab instances */
+.uitk-inspector__header-prefab-override-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--unity-colors-object_field-border-focus);
+}
+
 .uitk-inspector__header:hover {
     background-color: var(--unity-colors-inspector_titlebar-background-hover);
 }
 
 .uitk-inspector__header:focus {
-    color: var(--uitk-inspector-colors-text-highlight);
+    color: var(--unity-colors-label-text-focus);
 }
 
 .uitk-inspector__header--collapsed,
@@ -45,12 +56,29 @@
     -unity-font-style: bold;
 }
 
+.uitk-inspector__header-icon-container {
+    position: relative;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
 .uitk-inspector__header-icon,
 .uitk-inspector__header-button {
     flex: 0 0 auto;
     width: 16px;
     height: 16px;
 }
+
+/* Full transparent overlay (e.g. PrefabOverlayAdded) — same size, layered on top */
+.uitk-inspector__header-icon-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 16px;
+    height: 16px;
+}
+
 
 .uitk-inspector__header-enable-toggle {
     flex: 0 0 auto;

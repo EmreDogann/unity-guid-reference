@@ -21,6 +21,12 @@ public static class StyleSheetUtility
     public const string InspectorHeaderButtonUssClassName = "uitk-inspector__header-button";
     /// <summary> USS class name of the inspector header icon. </summary>
     public const string InspectorHeaderIconUssClassName = "uitk-inspector__header-icon";
+    /// <summary> USS class name of the inspector header icon container (wraps icon + overlay). </summary>
+    public const string InspectorHeaderIconContainerUssClassName = "uitk-inspector__header-icon-container";
+    /// <summary> USS class name of the full-size prefab overlay (e.g. PrefabOverlayAdded). </summary>
+    public const string InspectorHeaderIconOverlayUssClassName = "uitk-inspector__header-icon-overlay";
+    /// <summary> USS class name of the blue prefab override bar on the left edge of the header. </summary>
+    public const string InspectorHeaderPrefabOverrideBarUssClassName = "uitk-inspector__header-prefab-override-bar";
     /// <summary> USS class name of the inspector header enable toggle (Mono Behaviours only). </summary>
     public const string InspectorHeaderEnableToggleUssClassName = "uitk-inspector__header-enable-toggle";
 
@@ -99,19 +105,6 @@ public static class StyleSheetUtility
 
             return _lightTheme;
         }
-    }
-
-    /// <summary>
-    ///     Pass a custom root element to this method to use the appropiate USS variables and class names for Unity's current skin.
-    /// </summary>
-    /// <param name="rootElement">The custom root element that will contain the variables. </param>
-    public static void ApplyCurrentTheme(VisualElement rootElement)
-    {
-        bool isDark = EditorGUIUtility.isProSkin;
-
-        StyleSheet style = isDark ? DarkTheme : LightTheme;
-        rootElement.styleSheets.Add(style);
-        rootElement.AddToClassList(VariablesContainerUssClassName);
     }
 
     private static T GetAsset<T>(string relativePath) where T : Object

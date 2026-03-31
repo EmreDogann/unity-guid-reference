@@ -16,8 +16,6 @@ public class CustomLabelField : BaseField<string>
 
         // Match PropertyField spacing exactly
         AddToClassList(alignedFieldUssClassName);
-
-        StyleSheetUtility.ApplyCurrentTheme(this);
     }
 
     /// <summary>
