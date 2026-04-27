@@ -1,0 +1,16 @@
+{
+    "name": "EmreeDev.UnityGuidReference.Samples",
+    "rootNamespace": "",
+    "references": [
+        "GUID:a38a6202e3971774db63a299b02b0c57"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
