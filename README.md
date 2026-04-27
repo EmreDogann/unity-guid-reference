@@ -1,6 +1,6 @@
 # Guid Based Reference
 
-_Globaly Unique IDentifier (GUID) for Game Objects and Components_
+_Stable Globaly Unique IDentifier (GUID) for Game Objects and Components_
 
 ![Unity-Guid-Reference-Banner](https://github.com/EmreDogann/unity-guid-reference/assets/48212096/61bd886e-487e-451d-a88d-8f75af2c573e)
 
