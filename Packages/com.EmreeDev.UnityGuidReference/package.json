@@ -1,7 +1,7 @@
 {
 	"name": "com.emreedev.unityguidreference",
 	"displayName":"Unity Guid Reference",
-	"version": "2.1.1",
+	"version": "2.1.2",
 	"unity": "6000.3",
 	"description": "Globaly Unique IDentifier (GUID) for Game Objects and Components.",
 	"dependencies": {
