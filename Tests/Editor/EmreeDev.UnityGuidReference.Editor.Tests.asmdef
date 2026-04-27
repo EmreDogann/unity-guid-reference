@@ -1,5 +1,5 @@
 {
-    "name": "floppycoffee.guid-reference.Editor.Tests",
+    "name": "EmreeDev.UnityGuidReference.Editor.Tests",
     "rootNamespace": "",
     "references": [
         "GUID:56bf217733fbea44ba8528c48e965b20",

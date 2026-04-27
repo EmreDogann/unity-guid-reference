@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
 #if UNITY_EDITOR
-[assembly: InternalsVisibleTo("floppycoffee.guid-reference.Editor")]
-[assembly: InternalsVisibleTo("floppycoffee.guid-reference.Editor.Tests")]
+[assembly: InternalsVisibleTo("EmreeDev.UnityGuidReference.Editor")]
+[assembly: InternalsVisibleTo("EmreeDev.UnityGuidReference.Editor.Tests")]
 #endif
