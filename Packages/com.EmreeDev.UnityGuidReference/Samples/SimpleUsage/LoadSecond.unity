@@ -13,7 +13,7 @@ OcclusionCullingSettings:
 --- !u!104 &2
 RenderSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 9
+  serializedVersion: 10
   m_Fog: 0
   m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_FogMode: 3
@@ -38,13 +38,12 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 12
-  m_GIWorkflowMode: 0
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -67,9 +66,6 @@ LightmapSettings:
     m_LightmapParameters: {fileID: 0}
     m_LightmapsBakeMode: 1
     m_TextureCompression: 1
-    m_FinalGather: 0
-    m_FinalGatherFiltering: 1
-    m_FinalGatherRayCount: 256
     m_ReflectionCompression: 2
     m_MixedBakeMode: 2
     m_BakeBackend: 0
@@ -206,10 +202,15 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -227,9 +228,11 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!114 &959225791
 MonoBehaviour:
@@ -243,14 +246,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3207c0d69694a2642bf725cc77684f0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serializedGuid: 4dae8d90a1559a4ba01b129108cb6351
-  componentGUIDs:
-  - cachedComponent: {fileID: 959225787}
-    serializedGuid: fdfbe92fed3c354189074f835d5f558d
-  - cachedComponent: {fileID: 959225786}
-    serializedGuid: 30d6a995544e9a469072c9aef1733bb3
-  - cachedComponent: {fileID: 959225790}
-    serializedGuid: e0df138762ff4b4d8be2abc5ea1aecd5
+  transformGuid:
+    serializableGuid:
+      m_GuidLow: 5174496579709321607
+      m_GuidHigh: 2158313504480882617
+    cachedComponent: {fileID: 0}
+    owningGameObject: {fileID: 959225784}
+    globalGameObjectId: GlobalObjectId_V1-2-95090c2c952b2544a95f3cc3cf026608-959225784-0
+    globalComponentId: 
+    cachedOwnerTypeReference: 
+  componentGuids:
+  - serializableGuid:
+      m_GuidLow: 4631752084855850630
+      m_GuidHigh: 15953003027391816885
+    cachedComponent: {fileID: 959225790}
+    owningGameObject: {fileID: 959225784}
+    globalGameObjectId: GlobalObjectId_V1-2-95090c2c952b2544a95f3cc3cf026608-959225784-0
+    globalComponentId: GlobalObjectId_V1-2-95090c2c952b2544a95f3cc3cf026608-959225790-0
+    cachedOwnerTypeReference: UnityEngine.MeshRenderer, UnityEngine.CoreModule
+  orphanedComponentGuids: []
+  cachedEntityId: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
