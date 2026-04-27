@@ -19,7 +19,7 @@ If you want to learn more about this plugin, please see this fantastic [video](h
 ## Installation
 To install the package, go to **Package Manager -> Add package from git URL**, and add:
 ```
-https://github.com/EmreDogann/unity-guid-reference.git
+https://github.com/EmreDogann/unity-guid-reference.git#v1
 ```
 
 ## Usage
