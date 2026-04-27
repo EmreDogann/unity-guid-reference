@@ -20,8 +20,7 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
     public event Action<Object> OnOptionPicked;
 
     public string Title;
-
-    private readonly List<Object> _objects = new List<Object>();
+    private readonly Dictionary<int, Object> _dropdownIDToObject = new Dictionary<int, Object>();
     private AdvancedDropdownItem _providedObjectRoot;
     private ViewState _viewState = ViewState.Everything;
 
@@ -92,12 +91,13 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
 
         if (item.enabled)
         {
-            if (item.id >= 0)
+            if (_dropdownIDToObject.TryGetValue(item.id, out Object itemObject))
             {
-                OnOptionPicked?.Invoke(_objects[item.id]);
+                OnOptionPicked?.Invoke(itemObject);
             }
             else
             {
+                Debug.LogWarning("Could not find object reference, likely some internal ID handling error. Please contact code maintainer.");
                 OnOptionPicked?.Invoke(null);
             }
         }
@@ -106,7 +106,7 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
     private void BuildOptions(GuidComponent guidComponent)
     {
         AdvancedDropdownItem root = new AdvancedDropdownItem(Title);
-        _objects.Clear();
+        _dropdownIDToObject.Clear();
 
         var iterator = _lookupStrategy.Lookup();
         while (iterator.MoveNext())
@@ -138,22 +138,22 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
 
                     item = new AdvancedDropdownItem(label)
                     {
-                        icon = AssetPreview.GetMiniThumbnail(obj),
-                        id = _objects.Count
+                        icon = AssetPreview.GetMiniThumbnail(obj)
                     };
                     break;
                 case GameObject:
                     item = new AdvancedDropdownItem(obj.name)
                     {
-                        icon = AssetPreview.GetMiniThumbnail(obj),
-                        id = _objects.Count
+                        icon = AssetPreview.GetMiniThumbnail(obj)
                     };
+                    break;
+                default:
+                    item = new AdvancedDropdownItem("null");
                     break;
             }
 
             root.AddChild(item);
-
-            _objects.Add(cur.Obj);
+            _dropdownIDToObject.Add(item.id, cur.Obj);
         }
 
         _providedObjectRoot = root;
@@ -167,14 +167,14 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
         }
 
         AdvancedDropdownItem root = new AdvancedDropdownItem(Title);
-        _objects.Clear();
+        _dropdownIDToObject.Clear();
 
         int sceneCount = 0;
         AdvancedDropdownItem scene = new AdvancedDropdownItem("Scene");
 
         AdvancedDropdownItem nullChoice = new AdvancedDropdownItem("None");
-        nullChoice.id = -1;
         root.AddChild(nullChoice);
+        _dropdownIDToObject.Add(nullChoice.id, null);
 
         var sceneToItemMap = new Dictionary<Scene, AdvancedDropdownItem>();
         var iterator = _lookupStrategy.Lookup();
@@ -215,23 +215,24 @@ public class MultiSceneGuidPickerDropdown : AdvancedDropdown
 
                     item = new AdvancedDropdownItem(label)
                     {
-                        icon = AssetPreview.GetMiniThumbnail(obj),
-                        id = _objects.Count
+                        icon = AssetPreview.GetMiniThumbnail(obj)
                     };
                     break;
                 case GameObject:
                     item = new AdvancedDropdownItem(obj.name)
                     {
-                        icon = AssetPreview.GetMiniThumbnail(obj),
-                        id = _objects.Count
+                        icon = AssetPreview.GetMiniThumbnail(obj)
                     };
+                    break;
+                default:
+                    item = new AdvancedDropdownItem("null");
                     break;
             }
 
             sceneCount++;
             parentItem.AddChild(item);
 
-            _objects.Add(cur.Obj);
+            _dropdownIDToObject.Add(item.id, cur.Obj);
         }
 
         scene.enabled = sceneCount != 0;
