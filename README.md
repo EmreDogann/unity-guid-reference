@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> Currently undergoing a major refactor. If you would like to use the last stable version of this plugin, please use branch [`v1`](https://github.com/EmreDogann/unity-guid-reference/tree/94a157b57c59e6b9a21ef86f1194885a98f53c1d)
+> Currently undergoing a major refactor. If you would like to use the last stable version of this plugin, please use branch [`v1`](https://github.com/EmreDogann/unity-guid-reference/tree/v1)
 
 # Guid Based Reference
 
