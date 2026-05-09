@@ -1,5 +1,5 @@
 {
-    "name": "EmreeDev.UnityGuidReference.Editor.Tests",
+    "name": "EmreeDev.UnityGuidReference.Tests.Editor",
     "rootNamespace": "",
     "references": [
         "GUID:306103984f660d34983ec334a8835f27",
@@ -16,7 +16,7 @@
     "precompiledReferences": [
         "nunit.framework.dll"
     ],
-    "autoReferenced": false,
+    "autoReferenced": true,
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS"
     ],

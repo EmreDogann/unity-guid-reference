@@ -2,5 +2,5 @@
 
 #if UNITY_EDITOR
 [assembly: InternalsVisibleTo("EmreeDev.UnityGuidReference.Editor")]
-[assembly: InternalsVisibleTo("EmreeDev.UnityGuidReference.Editor.Tests")]
+[assembly: InternalsVisibleTo("EmreeDev.UnityGuidReference.Tests.Editor")]
 #endif
