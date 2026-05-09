@@ -477,11 +477,8 @@ public class GuidComponent : MonoBehaviour
 
     internal void OnValidate()
     {
-        bool isPartOfAnyPrefab = PrefabCheckerUtility.IsPartOfAnyPrefab(this);
-        bool isPartOfValidPrefabInstance = PrefabCheckerUtility.IsPartOfValidPrefabInstance(this);
-        bool isPartOfPrefabAssetOnly = PrefabCheckerUtility.IsPartOfPrefabAssetOnly(this);
-        bool isInPrefabStage = PrefabCheckerUtility.IsInPrefabStage(this);
-        if (isPartOfAnyPrefab && (!isPartOfValidPrefabInstance || isInPrefabStage))
+        if (PrefabCheckerUtility.IsPartOfAnyPrefab(this) &&
+            (!PrefabCheckerUtility.IsPartOfValidPrefabInstance(this) || PrefabCheckerUtility.IsInPrefabStage(this)))
         {
             // If component is part of prefab asset, set its values to null.
             if (HasGuidData())
