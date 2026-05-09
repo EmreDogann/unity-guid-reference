@@ -75,6 +75,7 @@ namespace Tests.Editor
         public void SetUp()
         {
             _createdObjects = new List<GameObject>();
+            GuidMappings.Instance.Clear();
         }
 
         [TearDown]
@@ -127,7 +128,6 @@ namespace Tests.Editor
             GuidComponent assetGuid = prefabStage.prefabContentsRoot.GetComponent<GuidComponent>();
 
             Assert.AreEqual(assetGuid.GetGuid(), Guid.Empty);
-
             StageUtility.GoToMainStage();
 
             yield return null;
