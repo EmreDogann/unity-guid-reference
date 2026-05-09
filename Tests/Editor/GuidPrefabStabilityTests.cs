@@ -121,6 +121,19 @@ namespace Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator PrefabAsset_PrefabStage_HasEmptyGuids()
+        {
+            PrefabStage prefabStage = PrefabStageUtility.OpenPrefab(SimplePrefabPath);
+            GuidComponent assetGuid = prefabStage.prefabContentsRoot.GetComponent<GuidComponent>();
+
+            Assert.AreEqual(assetGuid.GetGuid(), Guid.Empty);
+
+            StageUtility.GoToMainStage();
+
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator NestedPrefabAsset_HasEmptyGuids_AtAllLevels()
         {
             GuidComponent outerGuid = _nestedPrefab.GetComponent<GuidComponent>();
@@ -128,6 +141,21 @@ namespace Tests.Editor
 
             Assert.AreEqual(outerGuid.GetGuid(), Guid.Empty);
             Assert.AreEqual(innerGuid.GetGuid(), Guid.Empty);
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator NestedPrefabAsset_PrefabStage_HasEmptyGuids_AtAllLevels()
+        {
+            PrefabStage prefabStage = PrefabStageUtility.OpenPrefab(NestedPrefabPath);
+            GuidComponent outerGuid = prefabStage.prefabContentsRoot.GetComponent<GuidComponent>();
+            GuidComponent innerGuid = prefabStage.prefabContentsRoot.transform.GetChild(0).GetComponent<GuidComponent>();
+
+            Assert.AreEqual(outerGuid.GetGuid(), Guid.Empty);
+            Assert.AreEqual(innerGuid.GetGuid(), Guid.Empty);
+
+            StageUtility.GoToMainStage();
 
             yield return null;
         }

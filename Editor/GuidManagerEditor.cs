@@ -334,10 +334,20 @@ public class GuidManagerEditor
     {
         // PREFAB-1: Removing Components from the prefab asset will not call it's OnDestroy() function on
         // prefab instances. We need to clean up ourselves.
-        if (!instance.GetComponent<GuidComponent>())
+        if (instance.GetComponent<GuidComponent>() is not {} guidComponent)
         {
             GlobalObjectId gameObjectId = GlobalObjectId.GetGlobalObjectIdSlow(instance);
             GetMappings().RemoveRecord(gameObjectId.ToString());
+        }
+        else
+        {
+            // PREFAB-5: Converting a plain GameObject into a prefab asset/instance will change its GlobalObjectID.
+            // So, we need to refresh stored IDs to match the new format, while keeping existing GUIDs.
+            GlobalObjectId.TryParse(guidComponent.transformGuid.GlobalGameObjectId, out GlobalObjectId id);
+            if (id.targetPrefabId == 0)
+            {
+                RefreshIds(guidComponent);
+            }
         }
     }
 
@@ -353,7 +363,6 @@ public class GuidManagerEditor
     {
         // PREFAB-3: Unpacking a prefab instance will change its GlobalObjectId.
         // So, we need to refresh stored IDs to match the new format, while keeping existing GUIDs.
-
         switch (unpackMode)
         {
             case PrefabUnpackMode.OutermostRoot:
@@ -375,29 +384,29 @@ public class GuidManagerEditor
         }
 
         return;
-
-        void RefreshIds(GuidComponent component)
-        {
-            if (component != null)
-            {
-                string prevGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
-                string[] prevGlobalComponentIds =
-                    component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
-
-                component.RefreshGlobalObjectIds();
-
-                string currentGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
-                string[] currentGlobalComponentIds =
-                    component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
-
-                GetMappings().RefreshMapping(prevGlobalGameObjectId, currentGlobalGameObjectId,
-                    prevGlobalComponentIds.Zip(currentGlobalComponentIds, (s, s1) => (s, s1)));
-            }
-        }
     }
 
     private static void OnEditorQuitting()
     {
         GuidComponent.IsQuitting = true;
+    }
+
+    static void RefreshIds(GuidComponent component)
+    {
+        if (component != null)
+        {
+            string prevGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
+            string[] prevGlobalComponentIds =
+                component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
+
+            component.RefreshGlobalObjectIds();
+
+            string currentGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
+            string[] currentGlobalComponentIds =
+                component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
+
+            GetMappings().RefreshMapping(prevGlobalGameObjectId, currentGlobalGameObjectId,
+                prevGlobalComponentIds.Zip(currentGlobalComponentIds, (s, s1) => (s, s1)));
+        }
     }
 }
