@@ -76,6 +76,8 @@ namespace Tests.Editor
         {
             _createdObjects = new List<GameObject>();
             GuidMappings.Instance.Clear();
+
+            //EditorStepForwardToolbarButton.ShowButton();
         }
 
         [TearDown]
@@ -90,6 +92,13 @@ namespace Tests.Editor
             }
 
             _createdObjects.Clear();
+
+            //EditorStepForwardToolbarButton.HideButton();
+        }
+
+        private static bool WaitForStepForward()
+        {
+            return EditorStepForwardToolbarButton.ConsumeStep();
         }
 
         private GameObject InstantiatePrefab(GameObject prefab)
@@ -264,17 +273,23 @@ namespace Tests.Editor
         [UnityTest]
         public IEnumerator PrefabInstance_UnpackOutermost_PreservesGuids()
         {
+            //yield return new WaitUntil(WaitForStepForward);
+
             GameObject instance = InstantiatePrefab(_simplePrefab);
             GuidComponent guidComp = instance.GetComponent<GuidComponent>();
             BoxCollider collider = instance.GetComponent<BoxCollider>();
 
             TrackComponent(guidComp, collider);
 
+            //yield return new WaitUntil(WaitForStepForward);
+
             Guid transGuid = guidComp.GetGuid();
             Guid compGuid = guidComp.componentGuids[0].serializableGuid.Guid;
 
             PrefabUtility.UnpackPrefabInstance(instance, PrefabUnpackMode.OutermostRoot,
                 InteractionMode.AutomatedAction);
+
+            //yield return new WaitUntil(WaitForStepForward);
 
             Assert.AreEqual(guidComp.GetGuid(), transGuid);
             Assert.AreEqual(guidComp.componentGuids[0].serializableGuid.Guid, compGuid);
