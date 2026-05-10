@@ -75,6 +75,7 @@ namespace Tests.Editor
         public void SetUp()
         {
             _createdObjects = new List<GameObject>();
+            Undo.ClearAll();
             GuidMappings.Instance.Clear();
 
             //EditorStepForwardToolbarButton.ShowButton();

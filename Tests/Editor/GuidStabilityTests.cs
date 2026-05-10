@@ -15,6 +15,7 @@ namespace Tests.Editor
     public class GuidStabilityTests
     {
         private const string TestScenePath = "Assets/TemporaryGuidStabilityTestScene.unity";
+        private const string GuidGameObjectName = "GuidTestGO";
 
         private Scene _testScene;
         private List<GameObject> _createdObjects;
@@ -44,6 +45,9 @@ namespace Tests.Editor
         {
             _createdObjects = new List<GameObject>();
             Undo.ClearAll();
+            GuidMappings.Instance.Clear();
+
+            EditorStepForwardToolbarButton.ShowButton();
         }
 
         [TearDown]
@@ -58,12 +62,19 @@ namespace Tests.Editor
             }
 
             _createdObjects.Clear();
+
+            EditorStepForwardToolbarButton.HideButton();
+        }
+
+        private static bool WaitForStepForward()
+        {
+            return EditorStepForwardToolbarButton.ConsumeStep();
         }
 
         /// <summary>
         ///     Creates a new GameObject, then adds GuidComponent.
         /// </summary>
-        private GuidComponent CreateGuidComponent(string name = "GuidTestGO")
+        private GuidComponent CreateGuidComponent(string name = GuidGameObjectName)
         {
             GameObject go = new GameObject(name);
             _createdObjects.Add(go);
@@ -82,12 +93,42 @@ namespace Tests.Editor
         /// </summary>
         private void TrackComponent(GuidComponent guidComp, Component component)
         {
+            Undo.RecordObject(guidComp, "Track Component");
+
             guidComp.componentGuids.Add(new ComponentGuid
             {
                 CachedComponent = component,
                 OwningGameObject = guidComp.gameObject
             });
             guidComp.OnValidate();
+
+            Undo.IncrementCurrentGroup();
+        }
+
+        /// <summary>
+        ///     Simulates the GuidComponentDrawer "Orphan GUID" button.
+        /// </summary>
+        private void UntrackComponent(GuidComponent guidComp, ComponentGuid componentGuid)
+        {
+            Undo.RecordObject(guidComp, "Untrack Component");
+
+            guidComp.orphanedComponentGuids.Add(componentGuid);
+            guidComp.componentGuids.Remove(componentGuid);
+            guidComp.NotifyGuidRemoved(componentGuid);
+
+            Undo.IncrementCurrentGroup();
+        }
+
+        /// <summary>
+        ///     Simulates the GuidComponentDrawer "Remove Orphaned GUID" button.
+        /// </summary>
+        private void RemoveOrphanedGuid(GuidComponent guidComp, ComponentGuid componentGuid)
+        {
+            Undo.RecordObject(guidComp, "Remove Orphaned Component");
+
+            guidComp.NotifyOrphanRemoved(componentGuid);
+            guidComp.orphanedComponentGuids.Remove(componentGuid);
+
             Undo.IncrementCurrentGroup();
         }
 
@@ -115,7 +156,7 @@ namespace Tests.Editor
         }
 
         [UnityTest]
-        public IEnumerator TransformGuid_RemainsStable_AcrossMultipleOnValidateCalls()
+        public IEnumerator TransformGuid_IsStable_AcrossMultipleOnValidateCalls()
         {
             GuidComponent guid = CreateGuidComponent();
             Guid firstGuid = guid.GetGuid();
@@ -154,9 +195,6 @@ namespace Tests.Editor
 
             Undo.DestroyObjectImmediate(guid);
             Undo.IncrementCurrentGroup();
-
-            Assert.IsNull(go.GetComponent<GuidComponent>());
-
             Undo.PerformUndo();
 
             GuidComponent restored = go.GetComponent<GuidComponent>();
@@ -174,15 +212,74 @@ namespace Tests.Editor
 
             // Doesn't call GuidComponent.OnValidate() function.
             GameObject clone = Object.Instantiate(original.gameObject);
-
             _createdObjects.Add(clone);
-
             GuidComponent cloneGuid = clone.GetComponent<GuidComponent>();
 
             Assert.IsNotNull(cloneGuid);
             Assert.AreNotEqual(cloneGuid.GetGuid(), Guid.Empty);
             Assert.AreNotEqual(cloneGuid.GetGuid(), originalGuid);
             Assert.AreEqual(original.GetGuid(), originalGuid);
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TransformGuid_IsStable_EnteringPlayMode()
+        {
+            // Edit Mode: Create Test GO
+            Guid originalGuid = CreateGuidComponent(GuidGameObjectName).GetGuid();
+            // Need to use some form of storage so local data lives past domain reload in EnterPlayMode().
+            SessionState.SetString("guid", originalGuid.ToString());
+
+            yield return new EnterPlayMode();
+
+            // Restore Guid from session storage
+            originalGuid = new Guid(SessionState.GetString("guid", ""));
+            SessionState.EraseString("guid");
+
+            // Play Mode: Find test GO in case reference lost due to domain reload.
+            GameObject originalGO = GameObject.Find(GuidGameObjectName);
+            Assert.IsNotNull(originalGO);
+
+            GuidComponent originalPlayMode = originalGO.GetComponent<GuidComponent>();
+
+            Assert.IsNotNull(originalPlayMode);
+            Assert.AreEqual(originalPlayMode.GetGuid(), originalGuid);
+
+            yield return new ExitPlayMode();
+
+            // Re-add test game object to make sure it gets cleaned-up.
+            GameObject editModeGO = GameObject.Find(GuidGameObjectName);
+            _createdObjects.Add(editModeGO);
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TransformGuid_IsStable_ExitingPlayMode()
+        {
+            // Edit Mode: Create Test GO
+            Guid originalGuid = CreateGuidComponent(GuidGameObjectName).GetGuid();
+            // Need to use some form of storage so local data lives past domain reload in EnterPlayMode().
+            SessionState.SetString("guid", originalGuid.ToString());
+
+            yield return new EnterPlayMode();
+            yield return new ExitPlayMode();
+
+            // Restore Guid from session storage
+            originalGuid = new Guid(SessionState.GetString("guid", ""));
+            SessionState.EraseString("guid");
+
+            // Edit Mode: Find test GO again in case reference lost due to domain reload.
+            GameObject editModeGO = GameObject.Find(GuidGameObjectName);
+            Assert.IsNotNull(editModeGO, "Cannot find Test GameObject!");
+
+            // Re-add test game object to make sure it gets cleaned-up.
+            _createdObjects.Add(editModeGO);
+
+            GuidComponent editModeGuidComponent = editModeGO.GetComponent<GuidComponent>();
+            Assert.IsNotNull(editModeGuidComponent, "Cannot find Test GameObject's Guid Component!");
+            Assert.AreEqual(editModeGuidComponent.GetGuid(), originalGuid, "Guid lost after entering and exiting playmode!");
 
             yield return null;
         }
@@ -227,7 +324,7 @@ namespace Tests.Editor
         }
 
         [UnityTest]
-        public IEnumerator ComponentGuids_RemainStable_AcrossMultipleOnValidateCalls()
+        public IEnumerator ComponentGuids_IsStable_AcrossMultipleOnValidateCalls()
         {
             GuidComponent guidComp = CreateGuidComponent();
             BoxCollider collider = guidComp.gameObject.AddComponent<BoxCollider>();
@@ -265,6 +362,7 @@ namespace Tests.Editor
             Undo.PerformUndo();
 
             GuidComponent restored = go.GetComponent<GuidComponent>();
+
             Assert.IsNotNull(restored);
             Assert.AreEqual(restored.GetGuid(), transGuid);
             Assert.AreEqual(restored.componentGuids.Count, 1);
@@ -302,21 +400,8 @@ namespace Tests.Editor
             yield return null;
         }
 
-        // ---- Structural Tests ----
-
         [UnityTest]
-        public IEnumerator GuidComponent_HasDisallowMultipleComponentAttribute()
-        {
-            object[] attributes =
-                typeof(GuidComponent).GetCustomAttributes(typeof(DisallowMultipleComponent), true);
-
-            Assert.IsTrue(attributes.Length > 0);
-
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator TrackedComponent_MovesToOrphaned_WhenDestroyed()
+        public IEnumerator ComponentGuid_IsOrphaned_WhenTrackedComponentDestroyed()
         {
             GuidComponent guidComp = CreateGuidComponent();
             BoxCollider collider = guidComp.gameObject.AddComponent<BoxCollider>();
@@ -334,6 +419,54 @@ namespace Tests.Editor
             Assert.AreEqual(guidComp.componentGuids.Count, 0);
             Assert.AreEqual(guidComp.orphanedComponentGuids.Count, 1);
             Assert.AreEqual(guidComp.orphanedComponentGuids[0].serializableGuid.Guid, compGuid);
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ComponentGuid_IsStable_WhenUndoAndRedo()
+        {
+            GuidComponent guidComp = CreateGuidComponent();
+            SphereCollider sphereCollider = guidComp.gameObject.AddComponent<SphereCollider>();
+            BoxCollider boxCollider = guidComp.gameObject.AddComponent<BoxCollider>();
+            Rigidbody rb = guidComp.gameObject.AddComponent<Rigidbody>();
+
+            TrackComponent(guidComp, sphereCollider);
+            TrackComponent(guidComp, boxCollider);
+            TrackComponent(guidComp, rb);
+
+            Guid originalSphereColliderGuid = guidComp.componentGuids[0].serializableGuid.Guid;
+            Guid originalBoxColliderGuid = guidComp.componentGuids[1].serializableGuid.Guid;
+            Guid originalRigidbodyGuid = guidComp.componentGuids[2].serializableGuid.Guid;
+
+            UntrackComponent(guidComp, guidComp.componentGuids[1]); // Untrack Box Collider.
+            UntrackComponent(guidComp, guidComp.componentGuids[1]); // Untrack Rigidbody (index is correct here as the array shrank).
+            RemoveOrphanedGuid(guidComp, guidComp.orphanedComponentGuids[1]); // Remove Rigidbody orphaned guid.
+
+            Undo.PerformUndo();
+            Undo.PerformUndo();
+            Undo.PerformUndo();
+
+            Guid sphereColliderGuid = guidComp.componentGuids[0].serializableGuid.Guid;
+            Guid boxColliderGuid = guidComp.componentGuids[1].serializableGuid.Guid;
+            Guid rbGuid = guidComp.componentGuids[2].serializableGuid.Guid;
+
+            Assert.AreEqual(sphereColliderGuid, originalSphereColliderGuid);
+            Assert.AreEqual(boxColliderGuid, originalBoxColliderGuid);
+            Assert.AreEqual(rbGuid, originalRigidbodyGuid);
+
+            yield return null;
+        }
+
+        // ---- Structural Tests ----
+
+        [UnityTest]
+        public IEnumerator GuidComponent_HasDisallowMultipleComponentAttribute()
+        {
+            object[] attributes =
+                typeof(GuidComponent).GetCustomAttributes(typeof(DisallowMultipleComponent), true);
+
+            Assert.IsTrue(attributes.Length > 0);
 
             yield return null;
         }

@@ -525,7 +525,7 @@ public class GuidComponent : MonoBehaviour
             if (isMissing)
             {
                 orphanedComponentGuids.Add(guid);
-                OnGuidRemoved?.Invoke(guid);
+                NotifyGuidRemoved(guid);
             }
 
             return isMissing;
