@@ -114,7 +114,7 @@ namespace Tests.Editor
 
             guidComp.orphanedComponentGuids.Add(componentGuid);
             guidComp.componentGuids.Remove(componentGuid);
-            guidComp.NotifyGuidRemoved(componentGuid);
+            GuidComponent.MappingsHandler?.OrphanGuid(componentGuid);
 
             Undo.IncrementCurrentGroup();
         }
@@ -126,7 +126,7 @@ namespace Tests.Editor
         {
             Undo.RecordObject(guidComp, "Remove Orphaned Component");
 
-            guidComp.NotifyOrphanRemoved(componentGuid);
+            GuidComponent.MappingsHandler?.RemoveOrphanedGuid(componentGuid);
             guidComp.orphanedComponentGuids.Remove(componentGuid);
 
             Undo.IncrementCurrentGroup();

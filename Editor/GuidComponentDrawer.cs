@@ -207,7 +207,7 @@ public class GuidComponentDrawer : Editor
 
                 foreach (ComponentGuid componentGuid in missing)
                 {
-                    _guidComp.NotifyGuidRemoved(componentGuid);
+                    GuidComponent.MappingsHandler?.OrphanGuid(componentGuid);
                 }
 
                 serializedObject.ApplyModifiedProperties();
@@ -283,7 +283,7 @@ public class GuidComponentDrawer : Editor
                 if (idx >= 0)
                 {
                     MoveArrayElement(_componentGuidsProp, idx, _orphanedGuidsProp);
-                    _guidComp.NotifyGuidRemoved(componentGuid);
+                    GuidComponent.MappingsHandler?.OrphanGuid(componentGuid);
 
                     serializedObject.ApplyModifiedProperties();
                     Undo.SetCurrentGroupName("Orphan Guid from Component");
@@ -346,8 +346,8 @@ public class GuidComponentDrawer : Editor
                 _componentGuidsProp.InsertArrayElementAtIndex(newIndex);
                 AddNewGuid(_componentGuidsProp.GetArrayElementAtIndex(newIndex), component, _guidComp.gameObject);
 
-                serializedObject.ApplyModifiedProperties();
                 Undo.SetCurrentGroupName("Assign Guid to Component");
+                serializedObject.ApplyModifiedProperties();
             };
 
             element.Add(icon);
@@ -495,11 +495,11 @@ public class GuidComponentDrawer : Editor
                 int idx = FindComponentGuidIndex(_orphanedGuidsProp, orphanedGuid);
                 if (idx >= 0)
                 {
-                    _guidComp.NotifyOrphanRemoved(orphanedGuid);
+                    Undo.SetCurrentGroupName("Remove Orphaned Guid");
+                    GuidComponent.MappingsHandler?.RemoveOrphanedGuid(orphanedGuid);
                     _orphanedGuidsProp.DeleteArrayElementAtIndex(idx);
 
                     serializedObject.ApplyModifiedProperties();
-                    Undo.SetCurrentGroupName("Remove Orphaned Guid");
                 }
             };
             labelFieldComponentGuid.contentContainer.Add(button);
@@ -831,6 +831,11 @@ public class GuidComponentDrawer : Editor
 
                             menu.AddSeparator("");
                         }
+
+                        menu.AddItem(new GUIContent("Duplicate"), false,
+                            () => { Instantiate(_guidComp); });
+
+                        menu.AddSeparator("");
 
                         menu.AddItem(new GUIContent("Remove Guid Component"), false,
                             () =>

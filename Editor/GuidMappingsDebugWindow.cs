@@ -25,12 +25,26 @@ public class GuidMappingsDebugWindow : EditorWindow
     private TreeView _treeView;
     private Label _countLabel;
 
+    private static bool _rebuildScheduled;
+
     [MenuItem("Tools/Guid Referencing/Guid Mappings Viewer")]
     private static void ShowWindow()
     {
         GuidMappingsDebugWindow window = GetWindow<GuidMappingsDebugWindow>();
         window.titleContent = new GUIContent("Guid Mappings Viewer");
         window.Show();
+    }
+
+    internal static void RebuildWindow()
+    {
+        if (_rebuildScheduled) return;
+        _rebuildScheduled = true;
+        EditorApplication.delayCall += () =>
+        {
+            _rebuildScheduled = false;
+            if (!HasOpenInstances<GuidMappingsDebugWindow>()) return;
+            GetWindow<GuidMappingsDebugWindow>().RebuildTree();
+        };
     }
 
     private void CreateGUI()
@@ -56,6 +70,7 @@ public class GuidMappingsDebugWindow : EditorWindow
         Button clearButton = new Button(() =>
         {
             GuidMappings.Instance.Clear();
+            Undo.ClearAll();
             RebuildTree();
         }) { text = "Clear" };
         toolbar.Add(refreshButton);
@@ -86,12 +101,6 @@ public class GuidMappingsDebugWindow : EditorWindow
 
         rootVisualElement.Add(_treeView);
 
-        GuidComponent.OnCacheGuid += OnMappingsChanged;
-        GuidComponent.OnGuidRemoved += OnMappingsChanged;
-        GuidComponent.OnCacheOrphan += OnMappingsChanged;
-        GuidComponent.OnOrphanRemoved += OnMappingsChanged;
-        GuidComponent.OnGuidComponentDestroying += OnGuidComponentDestroying;
-
         PrefabUtility.prefabInstanceUpdated += PrefabInstanceUpdated;
 
         RebuildTree();
@@ -99,23 +108,7 @@ public class GuidMappingsDebugWindow : EditorWindow
 
     private void OnDestroy()
     {
-        GuidComponent.OnCacheGuid -= OnMappingsChanged;
-        GuidComponent.OnGuidRemoved -= OnMappingsChanged;
-        GuidComponent.OnCacheOrphan -= OnMappingsChanged;
-        GuidComponent.OnOrphanRemoved -= OnMappingsChanged;
-        GuidComponent.OnGuidComponentDestroying -= OnGuidComponentDestroying;
-
         PrefabUtility.prefabInstanceUpdated -= PrefabInstanceUpdated;
-    }
-
-    private void OnMappingsChanged(ComponentGuid _)
-    {
-        EditorApplication.delayCall += RebuildTree;
-    }
-
-    private void OnGuidComponentDestroying(GuidComponent _)
-    {
-        EditorApplication.delayCall += RebuildTree;
     }
 
     private void PrefabInstanceUpdated(GameObject _)
@@ -194,7 +187,7 @@ public class GuidMappingsDebugWindow : EditorWindow
             GuidMappings.GuidRecord record = kvp.Value;
             var children = new List<TreeViewItemData<TreeItemData>>();
 
-            if (record.transformGuid != null)
+            if (record.transformGuid.cachedComponent != null)
             {
                 children.Add(new TreeViewItemData<TreeItemData>(
                     (transformKey + ":transform").GetHashCode(),

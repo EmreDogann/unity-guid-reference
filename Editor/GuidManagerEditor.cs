@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -8,9 +7,140 @@ using UnityEngine;
 [InitializeOnLoad]
 public class GuidManagerEditor
 {
+    private static bool _isPrefabStageClosing;
+
     private static GuidMappings GetMappings()
     {
         return GuidMappings.Instance;
+    }
+
+    private sealed class EditorMappingsHandler : GuidComponent.IGuidMappingsHandler
+    {
+        public void InitializeComponent(GuidComponent component)
+        {
+            InitializeComponent_Impl(component);
+            GuidMappingsDebugWindow.RebuildWindow();
+        }
+
+        public void OrphanGuid(ComponentGuid componentGuid)
+        {
+            OrphanGuid_Impl(componentGuid);
+            GuidMappingsDebugWindow.RebuildWindow();
+        }
+
+        public void RemoveOrphanedGuid(ComponentGuid componentGuid)
+        {
+            RemoveOrphanedGuid_Impl(componentGuid);
+            GuidMappingsDebugWindow.RebuildWindow();
+        }
+
+        public void RemoveComponent(GuidComponent guidComponent)
+        {
+            RemoveComponent_Impl(guidComponent);
+            GuidMappingsDebugWindow.RebuildWindow();
+        }
+
+        public bool CheckIsDuplicate(GuidComponent guidComponent)
+        {
+            return CheckIsDuplicate_Impl(guidComponent);
+        }
+    }
+
+    private static bool CheckIsDuplicate_Impl(GuidComponent guidComponent)
+    {
+        return GetMappings().TryGetRecord(guidComponent.transformGuid.GlobalGameObjectId, out GuidMappings.GuidRecord record)
+               && record.transformGuid.cachedComponent != null
+               && record.transformGuid.cachedComponent != guidComponent.transformGuid.OwningGameObject.transform;
+    }
+
+    private static void InitializeComponent_Impl(GuidComponent component)
+    {
+        if (string.IsNullOrEmpty(component.transformGuid.GlobalGameObjectId))
+        {
+            return;
+        }
+
+        GuidMappings mappings = GetMappings();
+
+        // Undo/redo just restored GuidComponent (the source of truth).
+        // Wipe this component's slice of the mappings so the repopulation
+        // below cannot be "polluted" by stale entries from before the undo.
+        if (Undo.isProcessing)
+        {
+            mappings.RemoveRecord(component.transformGuid.GlobalGameObjectId);
+        }
+
+        if (!ProcessComponentGuid(component, component.transformGuid, mappings))
+        {
+            // Duplicate found, reset GuidComponent and try again.
+            component.transformGuid = new ComponentGuid
+            {
+                OwningGameObject = component.gameObject
+            };
+            component.componentGuids.Clear();
+            component.orphanedComponentGuids.Clear();
+
+            ProcessComponentGuid(component, component.transformGuid, mappings);
+        }
+
+        foreach (ComponentGuid cg in component.componentGuids)
+        {
+            ProcessComponentGuid(component, cg, mappings);
+        }
+
+        foreach (ComponentGuid orphan in component.orphanedComponentGuids)
+        {
+            if (!string.IsNullOrEmpty(orphan.GlobalGameObjectId))
+            {
+                mappings.CacheOrphan(orphan.GlobalGameObjectId, new GuidMappings.OrphanGuidItem
+                {
+                    guid = orphan.serializableGuid,
+                    ownerTypeReference = orphan.CachedOwnerTypeReference
+                });
+            }
+        }
+
+        // Always reconcile: restore entries from GuidMappings that are missing from componentGuids/orphanedComponentGuids.
+        // Handles serialized data wipes from paste/revert/reset. No-op when everything is in sync.
+        ReconcileComponentGuids(component);
+    }
+
+    private static bool ProcessComponentGuid(GuidComponent guidComponent, ComponentGuid componentGuid, GuidMappings mappings)
+    {
+        string transformKey = componentGuid.GlobalGameObjectId;
+        string componentKey = componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId;
+
+        if (componentGuid.serializableGuid != SerializableGuid.Empty)
+        {
+            // Cannot cache, already exists, this entry is a duplicate!
+            if (!mappings.Cache(transformKey, componentKey,
+                    CreateGuidItem(componentGuid, componentGuid.serializableGuid)))
+            {
+                return false;
+            }
+
+            if (!componentGuid.IsRootComponent())
+            {
+                mappings.RemoveOrphan(transformKey, componentGuid.serializableGuid);
+            }
+        }
+        else
+        {
+            // If we don't have a cached guid, then try find in mapping file. Whether found or not, this will fill this component's guid.
+            if (TryRestore(componentGuid, out Guid restored))
+            {
+                componentGuid.serializableGuid = SerializableGuid.Create(restored);
+            }
+            else
+            {
+                Undo.RecordObject(guidComponent, Undo.GetCurrentGroupName());
+                SerializableGuid newGuid = SerializableGuid.Create(Guid.NewGuid());
+                componentGuid.serializableGuid = newGuid;
+                mappings.Add(transformKey, componentKey, CreateGuidItem(componentGuid, newGuid));
+            }
+        }
+
+        return true;
     }
 
     private static GuidMappings.GuidItem CreateGuidItem(ComponentGuid componentGuid, SerializableGuid guid)
@@ -27,34 +157,6 @@ public class GuidManagerEditor
         };
     }
 
-    private static void Register(ComponentGuid componentGuid, SerializableGuid guid)
-    {
-        if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
-        {
-            return;
-        }
-
-        GetMappings().Add(
-            componentGuid.GlobalGameObjectId,
-            componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId,
-            CreateGuidItem(componentGuid, guid)
-        );
-    }
-
-    private static void CacheMapping(ComponentGuid componentGuid, SerializableGuid guid)
-    {
-        if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
-        {
-            return;
-        }
-
-        GetMappings().Cache(
-            componentGuid.GlobalGameObjectId,
-            componentGuid.IsRootComponent() ? "" : componentGuid.GlobalComponentId,
-            CreateGuidItem(componentGuid, guid)
-        );
-    }
-
     private static bool TryRestore(ComponentGuid componentGuid, out Guid guid)
     {
         guid = Guid.Empty;
@@ -64,20 +166,20 @@ public class GuidManagerEditor
             return false;
         }
 
-        bool found;
-        GuidMappings.GuidItem guidItem;
         if (componentGuid.IsRootComponent())
         {
-            found = GetMappings().TryGetRecord(componentGuid.GlobalGameObjectId, out GuidMappings.GuidRecord record);
-            guidItem = found ? record.transformGuid : null;
-        }
-        else
-        {
-            found = GetMappings().TryGetByKey(componentGuid.GlobalGameObjectId, componentGuid.GlobalComponentId,
-                out guidItem);
+            if (GetMappings().TryGetRecord(componentGuid.GlobalGameObjectId, out GuidMappings.GuidRecord record)
+                && record.transformGuid.cachedComponent != null)
+            {
+                guid = record.transformGuid.guid.Guid;
+                return true;
+            }
+
+            return false;
         }
 
-        if (found && guidItem != null)
+        if (GetMappings().TryGetByKey(componentGuid.GlobalGameObjectId, componentGuid.GlobalComponentId,
+                out GuidMappings.GuidItem guidItem))
         {
             guid = guidItem.guid.Guid;
             return true;
@@ -86,30 +188,7 @@ public class GuidManagerEditor
         return false;
     }
 
-    private static SerializableGuid TryRestoreOrCreateGuid(ComponentGuid componentGuid)
-    {
-        if (TryRestore(componentGuid, out Guid guid))
-        {
-            return SerializableGuid.Create(guid);
-        }
-
-        SerializableGuid serializableGuid = SerializableGuid.Create(Guid.NewGuid());
-        Register(componentGuid, serializableGuid);
-        return serializableGuid;
-    }
-
-    private static void OnCachedGuid(ComponentGuid componentGuid)
-    {
-        CacheMapping(componentGuid, componentGuid.serializableGuid);
-
-        // Clean up orphan entry if this guid was previously orphaned (handles adoption)
-        if (!componentGuid.IsRootComponent())
-        {
-            GetMappings().RemoveOrphan(componentGuid.GlobalGameObjectId, componentGuid.serializableGuid);
-        }
-    }
-
-    private static void OnComponentRemoved(ComponentGuid guid)
+    private static void OrphanGuid_Impl(ComponentGuid guid)
     {
         if (string.IsNullOrEmpty(guid.GlobalGameObjectId))
         {
@@ -129,21 +208,7 @@ public class GuidManagerEditor
         });
     }
 
-    private static void OnCachedOrphan(ComponentGuid componentGuid)
-    {
-        if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
-        {
-            return;
-        }
-
-        GetMappings().CacheOrphan(componentGuid.GlobalGameObjectId, new GuidMappings.OrphanGuidItem
-        {
-            guid = componentGuid.serializableGuid,
-            ownerTypeReference = componentGuid.CachedOwnerTypeReference
-        });
-    }
-
-    private static void OnOrphanRemoved(ComponentGuid componentGuid)
+    private static void RemoveOrphanedGuid_Impl(ComponentGuid componentGuid)
     {
         if (string.IsNullOrEmpty(componentGuid.GlobalGameObjectId))
         {
@@ -153,8 +218,17 @@ public class GuidManagerEditor
         GetMappings().RemoveOrphan(componentGuid.GlobalGameObjectId, componentGuid.serializableGuid);
     }
 
-    private static void OnGuidComponentDestroying(GuidComponent guidComponent)
+    private static void RemoveComponent_Impl(GuidComponent guidComponent)
     {
+        // We only want to remove the Guid Mapping if the user deleted the scene component
+        // (not a prefab asset, and not an automated action like scene unload, or playmode enter/exit).
+        if (PrefabCheckerUtility.IsPartOfPrefabAssetOnly(guidComponent)
+            || PrefabCheckerUtility.IsInPrefabStage(guidComponent)
+            || _isPrefabStageClosing)
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(guidComponent.transformGuid.GlobalGameObjectId))
         {
             return;
@@ -165,8 +239,8 @@ public class GuidManagerEditor
 
     // Reconciles componentGuids and orphanedComponentGuids against the GuidMappings cache, restoring
     // any entries that are present in the cache but missing from the component. This handles serialized
-    // data wipes from paste/revert/reset. When everything is in sync, this is a no-op (early return
-    // after a dict lookup).
+    // data wipes from paste/revert/reset. When everything is in sync, this is a no-op (dict lookup + two
+    // empty-foreach passes with no allocations).
     private static void ReconcileComponentGuids(GuidComponent guidComponent)
     {
         if (string.IsNullOrEmpty(guidComponent.transformGuid.GlobalGameObjectId))
@@ -180,145 +254,73 @@ public class GuidManagerEditor
             return;
         }
 
-        bool needsRestore = false;
-
-        // --- Assigned guid reconciliation ---
-        var missingGuids = new List<GuidMappings.GuidItem>();
+        // Assigned guid reconciliation
+        List<GuidMappings.GuidItem> missingGuids = null;
         foreach (GuidMappings.GuidItem assignedGuid in record.assignedGuids)
         {
-            if (!assignedGuid.cachedComponent)
-            {
-                continue;
-            }
-
-            if (!guidComponent.componentGuids.Exists(guid =>
-                    guid.GlobalComponentId == assignedGuid.globalObjectID))
-            {
-                missingGuids.Add(assignedGuid);
-            }
+            if (!assignedGuid.cachedComponent) continue;
+            if (!guidComponent.componentGuids.Exists(g => g.GlobalComponentId == assignedGuid.globalObjectID))
+                (missingGuids ??= new List<GuidMappings.GuidItem>()).Add(assignedGuid);
         }
 
-        if (missingGuids.Count > 0)
-        {
-            needsRestore = true;
-        }
-
-        // --- Orphan reconciliation ---
-        var missingOrphans = new List<GuidMappings.OrphanGuidItem>();
+        // Orphan reconciliation
+        List<GuidMappings.OrphanGuidItem> missingOrphans = null;
         foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids)
         {
-            // Skip if this guid is now in componentGuids (was adopted)
-            if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid))
-            {
-                continue;
-            }
-
-            // Skip if already in orphanedComponentGuids
-            if (guidComponent.orphanedComponentGuids.Exists(g => g.serializableGuid == orphan.guid))
-            {
-                continue;
-            }
-
-            missingOrphans.Add(orphan);
+            if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid)) continue;
+            if (guidComponent.orphanedComponentGuids.Exists(g => g.serializableGuid == orphan.guid)) continue;
+            (missingOrphans ??= new List<GuidMappings.OrphanGuidItem>()).Add(orphan);
         }
 
-        if (missingOrphans.Count > 0)
+        // Restore missing entries
+        if (missingGuids != null)
         {
-            needsRestore = true;
-        }
-
-        if (!needsRestore)
-        {
-            // Clean up stale orphans: remove from GuidMappings if guid was adopted
-            List<SerializableGuid> staleOrphans = null;
-            foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids)
+            foreach (GuidMappings.GuidItem missing in missingGuids)
             {
-                if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid))
-                {
-                    staleOrphans ??= new List<SerializableGuid>();
-                    staleOrphans.Add(orphan.guid);
-                }
+                ComponentGuid componentGuid = new ComponentGuid(
+                    record.transformGuid.globalObjectID,
+                    guidComponent.gameObject,
+                    missing.globalObjectID,
+                    missing.cachedComponent);
+                componentGuid.serializableGuid = missing.guid;
+                guidComponent.componentGuids.Add(componentGuid);
             }
+        }
 
-            if (staleOrphans != null)
+        if (missingOrphans != null)
+        {
+            foreach (GuidMappings.OrphanGuidItem missing in missingOrphans)
             {
-                foreach (SerializableGuid guid in staleOrphans)
-                {
-                    GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, guid);
-                }
+                ComponentGuid orphan = new ComponentGuid(
+                    record.transformGuid.globalObjectID,
+                    guidComponent.gameObject,
+                    string.Empty,
+                    null);
+                orphan.serializableGuid = missing.guid;
+                orphan.SetCachedOwnerTypeReference(missing.ownerTypeReference);
+                guidComponent.orphanedComponentGuids.Add(orphan);
             }
-
-            return;
         }
 
-        foreach (GuidMappings.GuidItem missing in missingGuids)
-        {
-            ComponentGuid componentGuid = new ComponentGuid(
-                record.transformGuid.globalObjectID,
-                guidComponent.gameObject,
-                missing.globalObjectID,
-                missing.cachedComponent);
-            componentGuid.serializableGuid = missing.guid;
-            guidComponent.componentGuids.Add(componentGuid);
-        }
-
-        foreach (GuidMappings.OrphanGuidItem missing in missingOrphans)
-        {
-            ComponentGuid orphan = new ComponentGuid(
-                record.transformGuid.globalObjectID,
-                guidComponent.gameObject,
-                string.Empty,
-                null);
-            orphan.serializableGuid = missing.guid;
-            orphan.SetCachedOwnerTypeReference(missing.ownerTypeReference);
-            guidComponent.orphanedComponentGuids.Add(orphan);
-        }
-
-        // Clean up stale orphans: remove from GuidMappings if guid was adopted
-        List<SerializableGuid> staleOrphansPostRestore = null;
+        // Stale orphan cleanup
+        // Removes from GuidMappings any orphan whose guid was adopted (moved to componentGuids).
+        List<SerializableGuid> staleOrphans = null;
         foreach (GuidMappings.OrphanGuidItem orphan in record.orphanedGuids)
         {
             if (guidComponent.componentGuids.Exists(g => g.serializableGuid == orphan.guid))
-            {
-                staleOrphansPostRestore ??= new List<SerializableGuid>();
-                staleOrphansPostRestore.Add(orphan.guid);
-            }
+                (staleOrphans ??= new List<SerializableGuid>()).Add(orphan.guid);
         }
 
-        if (staleOrphansPostRestore != null)
+        if (staleOrphans != null)
         {
-            foreach (SerializableGuid guid in staleOrphansPostRestore)
-            {
+            foreach (SerializableGuid guid in staleOrphans)
                 GetMappings().RemoveOrphan(guidComponent.transformGuid.GlobalGameObjectId, guid);
-            }
         }
     }
 
     static GuidManagerEditor()
     {
-        GuidComponent.OnGuidRequested -= TryRestoreOrCreateGuid;
-        GuidComponent.OnGuidRequested += TryRestoreOrCreateGuid;
-
-        GuidComponent.OnReconcileComponentGuids -= ReconcileComponentGuids;
-        GuidComponent.OnReconcileComponentGuids += ReconcileComponentGuids;
-
-        GuidComponent.OnCacheGuid -= OnCachedGuid;
-        GuidComponent.OnCacheGuid += OnCachedGuid;
-
-        GuidComponent.OnCacheOrphan -= OnCachedOrphan;
-        GuidComponent.OnCacheOrphan += OnCachedOrphan;
-
-        GuidComponent.OnGuidRemoved -= OnComponentRemoved;
-        GuidComponent.OnGuidRemoved += OnComponentRemoved;
-
-        GuidComponent.OnOrphanRemoved -= OnOrphanRemoved;
-        GuidComponent.OnOrphanRemoved += OnOrphanRemoved;
-
-        GuidComponent.OnGuidComponentDestroying -= OnGuidComponentDestroying;
-        GuidComponent.OnGuidComponentDestroying += OnGuidComponentDestroying;
-
-        EditorApplication.quitting -= OnEditorQuitting;
-        EditorApplication.quitting += OnEditorQuitting;
+        GuidComponent.MappingsHandler = new EditorMappingsHandler();
 
         PrefabUtility.prefabInstanceUnpacked -= PrefabUnpacked;
         PrefabUtility.prefabInstanceUnpacked += PrefabUnpacked;
@@ -355,8 +357,8 @@ public class GuidManagerEditor
     {
         // PREFAB-2: PrefabUtility.GetPrefabStage() doesn't work when exiting prefab stage, it returns null because
         // it calls the GuidComponent's OnDestroy function after it has cleaned-up.
-        GuidComponent.IsPrefabStageClosing = true;
-        EditorApplication.delayCall += () => GuidComponent.IsPrefabStageClosing = false;
+        _isPrefabStageClosing = true;
+        EditorApplication.delayCall += () => _isPrefabStageClosing = false;
     }
 
     private static void PrefabUnpacked(GameObject unpackedGameObject, PrefabUnpackMode unpackMode)
@@ -386,27 +388,45 @@ public class GuidManagerEditor
         return;
     }
 
-    private static void OnEditorQuitting()
-    {
-        GuidComponent.IsQuitting = true;
-    }
-
+    // Only used when unpacking prefab instances or converting plain GameObjects into prefabs, as that will change GlobalObjectIds
     static void RefreshIds(GuidComponent component)
     {
         if (component != null)
         {
+            // Get new GlobalObjectIds (bulk operation)
+            var entityIdList = new List<EntityId> { component.transformGuid.OwningGameObject.GetEntityId() };
+            foreach (ComponentGuid componentGuid in component.componentGuids)
+                if (componentGuid.CachedComponent != null) entityIdList.Add(componentGuid.CachedComponent.GetEntityId());
+            EntityId[] entityIds = entityIdList.ToArray();
+
+            GlobalObjectId[] newGlobalObjectIds = new GlobalObjectId[entityIds.Length];
+            GlobalObjectId.GetGlobalObjectIdsSlow(entityIds, newGlobalObjectIds);
+
             string prevGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
-            string[] prevGlobalComponentIds =
-                component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
+            string currentGlobalGameObjectId = newGlobalObjectIds[0].ToString();
+            component.transformGuid.GlobalGameObjectId = currentGlobalGameObjectId;
 
-            component.RefreshGlobalObjectIds();
+            var globalComponentIds = new List<(string oldComponentKey, string newComponentKey)>();
+            for (int index = 0; index < component.componentGuids.Count; index++)
+            {
+                ComponentGuid compGuid = component.componentGuids[index];
+                compGuid.GlobalGameObjectId = currentGlobalGameObjectId;
 
-            string currentGlobalGameObjectId = component.transformGuid.GlobalGameObjectId;
-            string[] currentGlobalComponentIds =
-                component.componentGuids.Select(guid => guid.GlobalComponentId).ToArray();
+                string prevComponentId = compGuid.GlobalComponentId;
+                if (compGuid.CachedComponent)
+                {
+                    // +1 because index 0 of the new GlobalObjectIds is the transformGuid.
+                    compGuid.GlobalComponentId = newGlobalObjectIds[index+1].ToString();
+                    globalComponentIds.Add((prevComponentId, compGuid.GlobalComponentId));
+                }
+            }
 
-            GetMappings().RefreshMapping(prevGlobalGameObjectId, currentGlobalGameObjectId,
-                prevGlobalComponentIds.Zip(currentGlobalComponentIds, (s, s1) => (s, s1)));
+            foreach (ComponentGuid orphan in component.orphanedComponentGuids)
+            {
+                orphan.GlobalGameObjectId = currentGlobalGameObjectId;
+            }
+
+            GetMappings().RefreshMapping(prevGlobalGameObjectId, currentGlobalGameObjectId, globalComponentIds);
         }
     }
 }

@@ -33,7 +33,7 @@ public sealed class GuidMappings : ScriptableObject
     }
 
     [Serializable]
-    public class GuidItem
+    public struct GuidItem
     {
         public string globalObjectID;
         public Component cachedComponent;
@@ -41,7 +41,7 @@ public sealed class GuidMappings : ScriptableObject
     }
 
     [Serializable]
-    public class OrphanGuidItem
+    public struct OrphanGuidItem
     {
         public SerializableGuid guid;
         public string ownerTypeReference;
@@ -50,7 +50,7 @@ public sealed class GuidMappings : ScriptableObject
     [Serializable]
     public class GuidRecord
     {
-        public GuidItem transformGuid;
+        public GuidItem transformGuid;           // default (cachedComponent == null) means unset
         public List<GuidItem> assignedGuids = new List<GuidItem>();
         public List<OrphanGuidItem> orphanedGuids = new List<OrphanGuidItem>();
     }
@@ -61,31 +61,29 @@ public sealed class GuidMappings : ScriptableObject
 
     internal IEnumerable<KeyValuePair<string, GuidRecord>> Records => goGlobalIdToGuidMap;
 
-    public void Cache(string transformKey, string componentKey, GuidItem guidItem)
+    public bool Cache(string transformKey, string componentKey, GuidItem guidItem)
     {
         if (string.IsNullOrEmpty(transformKey))
         {
             Debug.LogError("[GuidMappings] Error: transformKey must have a valid GlobalObjectID!");
-            return;
+            return false;
         }
 
-        Undo.RecordObject(this, "Cache GUID Mapping");
-        InsertMapping(transformKey, componentKey, guidItem, false);
+        return InsertMapping(transformKey, componentKey, guidItem, false);
     }
 
-    public void Add(string transformKey, string componentKey, GuidItem guidItem, bool overwriteIfExists = false)
+    public bool Add(string transformKey, string componentKey, GuidItem guidItem, bool overwriteIfExists = false)
     {
         if (string.IsNullOrEmpty(transformKey))
         {
             Debug.LogError("[GuidMappings] Error: transformKey must have a valid GlobalObjectID!");
-            return;
+            return false;
         }
 
-        Undo.RecordObject(this, "Added GUID Mapping");
-        InsertMapping(transformKey, componentKey, guidItem, overwriteIfExists);
+        return InsertMapping(transformKey, componentKey, guidItem, overwriteIfExists);
     }
 
-    private void InsertMapping(string transformKey, string componentKey, GuidItem guidItem, bool overwriteIfExists)
+    private bool InsertMapping(string transformKey, string componentKey, GuidItem guidItem, bool overwriteIfExists)
     {
         if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
@@ -117,31 +115,39 @@ public sealed class GuidMappings : ScriptableObject
         }
         else
         {
+            if (guidRecord.transformGuid.cachedComponent != null && guidRecord.transformGuid.cachedComponent != guidItem.cachedComponent)
+            {
+                Debug.LogWarning("[GuidMappings] Duplicate GuidComponent detected!");
+                return false;
+            }
+
             guidRecord.transformGuid = guidItem;
         }
+
+        return true;
     }
 
     public void RefreshMapping(string oldTransformKey, string newTransformKey,
         IEnumerable<(string oldComponentKey, string newComponentKey)> componentKeys)
     {
-        // We want this Undo record to be invisible, as this is a side effect of something like prefab unpacking.
-        Undo.RecordObject(this, Undo.GetCurrentGroupName());
-
         if (!goGlobalIdToGuidMap.Remove(oldTransformKey, out GuidRecord guidRecord))
         {
             return;
         }
 
         goGlobalIdToGuidMap.Add(newTransformKey, guidRecord);
-        guidRecord.transformGuid.globalObjectID = newTransformKey;
+        GuidItem transformGuid = guidRecord.transformGuid;
+        transformGuid.globalObjectID = newTransformKey;
+        guidRecord.transformGuid = transformGuid;
 
         foreach ((string oldComponentKey, string newComponentKey) keys in componentKeys)
         {
-            GuidItem componentGuidItem =
-                guidRecord.assignedGuids.Find(g => g.globalObjectID == keys.oldComponentKey);
-            if (componentGuidItem != null)
+            int idx = guidRecord.assignedGuids.FindIndex(g => g.globalObjectID == keys.oldComponentKey);
+            if (idx >= 0)
             {
-                componentGuidItem.globalObjectID = keys.newComponentKey;
+                GuidItem item = guidRecord.assignedGuids[idx];
+                item.globalObjectID = keys.newComponentKey;
+                guidRecord.assignedGuids[idx] = item;
             }
         }
     }
@@ -152,8 +158,6 @@ public sealed class GuidMappings : ScriptableObject
         {
             return;
         }
-
-        Undo.RecordObject(this, "Remove GUID Mapping");
 
         int idx = guidRecord.assignedGuids.FindIndex(g => g.globalObjectID == componentKey);
         if (idx >= 0)
@@ -169,8 +173,6 @@ public sealed class GuidMappings : ScriptableObject
             return;
         }
 
-        Undo.RecordObject(this, "Remove GUID Mapping");
-
         int idx = guidRecord.assignedGuids.FindIndex(g => g.guid == componentGuid);
         if (idx >= 0)
         {
@@ -180,12 +182,6 @@ public sealed class GuidMappings : ScriptableObject
 
     public void RemoveRecord(string transformKey)
     {
-        if (!goGlobalIdToGuidMap.ContainsKey(transformKey))
-        {
-            return;
-        }
-
-        Undo.RecordObject(this, "Remove GUID Mapping");
         goGlobalIdToGuidMap.Remove(transformKey);
     }
 
@@ -197,7 +193,6 @@ public sealed class GuidMappings : ScriptableObject
             return;
         }
 
-        Undo.RecordObject(this, "Cache Orphan GUID Mapping");
         InsertOrphan(transformKey, item, false);
     }
 
@@ -209,7 +204,6 @@ public sealed class GuidMappings : ScriptableObject
             return;
         }
 
-        Undo.RecordObject(this, "Added Orphan GUID Mapping");
         InsertOrphan(transformKey, item, false);
     }
 
@@ -245,7 +239,6 @@ public sealed class GuidMappings : ScriptableObject
         int idx = guidRecord.orphanedGuids.FindIndex(g => g.guid == orphanGuid);
         if (idx >= 0)
         {
-            Undo.RecordObject(this, "Remove Orphan GUID Mapping");
             guidRecord.orphanedGuids.RemoveAt(idx);
         }
     }
@@ -257,51 +250,35 @@ public sealed class GuidMappings : ScriptableObject
 
     public bool TryGetByKey(string transformKey, string componentKey, out GuidItem guidItem)
     {
-        guidItem = null;
+        guidItem = default;
         if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return false;
         }
 
-        guidItem = guidRecord.assignedGuids.Find(g => g.globalObjectID == componentKey);
-        return guidItem != null;
+        int idx = guidRecord.assignedGuids.FindIndex(g => g.globalObjectID == componentKey);
+        if (idx < 0) return false;
+        guidItem = guidRecord.assignedGuids[idx];
+        return true;
     }
 
     public bool TryGetByGuid(string transformKey, SerializableGuid componentGuid, out GuidItem guidItem)
     {
-        guidItem = null;
+        guidItem = default;
         if (!goGlobalIdToGuidMap.TryGetValue(transformKey, out GuidRecord guidRecord))
         {
             return false;
         }
 
-        guidItem = guidRecord.assignedGuids.Find(g => g.guid == componentGuid);
-        return guidItem != null;
+        int idx = guidRecord.assignedGuids.FindIndex(g => g.guid == componentGuid);
+        if (idx < 0) return false;
+        guidItem = guidRecord.assignedGuids[idx];
+        return true;
     }
 
     public void Clear()
     {
         goGlobalIdToGuidMap.Clear();
-    }
-
-    private void OnEnable()
-    {
-        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-    }
-
-    private void OnDisable()
-    {
-        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-    }
-
-    private void OnPlayModeStateChanged(PlayModeStateChange stateChange)
-    {
-        switch (stateChange)
-        {
-            case PlayModeStateChange.ExitingPlayMode:
-                Clear();
-                break;
-        }
     }
 
     internal static void RebuildGuidMappings()
